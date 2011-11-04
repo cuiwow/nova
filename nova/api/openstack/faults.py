@@ -77,6 +77,9 @@ class Fault(webob.exc.HTTPException):
 
         return self.wrapped_exc
 
+    def __str__(self):
+        return self.wrapped_exc.__str__()
+
 
 class OverLimitFault(webob.exc.HTTPException):
     """
