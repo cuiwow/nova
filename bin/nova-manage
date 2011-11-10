@@ -1786,8 +1786,8 @@ class ImageCommands(object):
     def __init__(self, *args, **kwargs):
         self.image_service = image.get_default_image_service()
 
-    def _register(self, container_format, disk_format,
-                  path, owner, name=None, is_public='T',
+    def _register(self, container_format, disk_format, path, owner,
+                  hypervisor, ostype, adaptertype, name=None, is_public='T',
                   architecture='x86_64', kernel_id=None, ramdisk_id=None,
                   auth_token=None):
         meta = {'is_public': (is_public == 'T'),
@@ -1802,6 +1802,13 @@ class ImageCommands(object):
             meta['properties']['kernel_id'] = int(kernel_id)
         if ramdisk_id:
             meta['properties']['ramdisk_id'] = int(ramdisk_id)
+        if hypervisor:
+            meta['properties']['hypervisor'] = hypervisor
+        if ostype:
+            meta['properties']['vmware_ostype'] = ostype
+        if adaptertype:
+            meta['properties']['vmware_adaptertype'] = adaptertype
+
         elevated = context.get_admin_context()
         if auth_token is not None:
             elevated.strategy = 'keystone'
@@ -1827,20 +1834,28 @@ class ImageCommands(object):
             help='Architecture')
     @args('--auth_token', dest="auth_token", metavar='<token>',
             help='Token to use to authenticate to the Image Service')
+    @args('--hypervisor', dest='hypervisor', metavar='<hypervisor>',
+            help='Supported Hypervisor')
     def all_register(self, image, kernel, ramdisk, owner, name=None,
-                 is_public='T', architecture='x86_64',
+                 is_public='T', architecture='x86_64', hypervisor='xenserver',
                  auth_token=None):
         """Uploads an image, kernel, and ramdisk into the image_service"""
         kernel_id = self.kernel_register(kernel, owner, None,
                                    is_public, architecture, auth_token)
         ramdisk_id = self.ramdisk_register(ramdisk, owner, None,
                                     is_public, architecture, auth_token)
-        self.image_register(image, owner, name, is_public,
-                            architecture, 'ami', 'ami',
+        self.image_register(image, owner, hypervisor, None, None, name,
+                            is_public, architecture, 'ami', 'ami',
                             kernel_id, ramdisk_id, auth_token)
 
     @args('--path', dest='path', metavar='<path>', help='Image path')
     @args('--owner', dest='owner', metavar='<owner>', help='Image owner')
+    @args('--hypervisor', dest='hypervisor', metavar='<hypervisor>',
+            help='Supported Hypervisor')
+    @args('--ostype', dest='ostype', metavar='<ostype>',
+            help='Operating System Type')
+    @args('--adaptertype', dest='adaptertype', metavar='<adaptertype>',
+            help='Virtual Adapter Type')
     @args('--name', dest='name', metavar='<name>', help='Image name')
     @args('--public', dest='is_public', metavar="<'T'|'F'>",
             help='Image public or not')
@@ -1855,13 +1870,15 @@ class ImageCommands(object):
     @args('--ram', dest='ramdisk_id', metavar='<ramdisk>', help='RAM disk')
     @args('--auth_token', dest="auth_token", metavar='<token>',
             help='Token to use to authenticate to the Image Service')
-    def image_register(self, path, owner, name=None, is_public='T',
+    def image_register(self, path, owner, hypervisor, ostype=None,
+                       adaptertype=None, name=None, is_public='T',
                        architecture='x86_64', container_format='bare',
                        disk_format='raw', kernel_id=None, ramdisk_id=None,
                        auth_token=None):
         """Uploads an image into the image_service"""
         return self._register(container_format, disk_format, path,
-                              owner, name, is_public, architecture,
+                              owner, hypervisor, ostype, adaptertype,
+                              name, is_public, architecture,
                               kernel_id, ramdisk_id, auth_token)
 
     @args('--path', dest='path', metavar='<path>', help='Image path')
@@ -1876,7 +1893,8 @@ class ImageCommands(object):
     def kernel_register(self, path, owner, name=None, is_public='T',
                architecture='x86_64', auth_token=None):
         """Uploads a kernel into the image_service"""
-        return self._register('aki', 'aki', path, owner, name,
+        return self._register('aki', 'aki', path, owner,
+                              None, None, None, name,
                               is_public, architecture,
                               auth_token=auth_token)
 
@@ -1892,7 +1910,8 @@ class ImageCommands(object):
     def ramdisk_register(self, path, owner, name=None, is_public='T',
                 architecture='x86_64', auth_token=None):
         """Uploads a ramdisk into the image_service"""
-        return self._register('ari', 'ari', path, owner, name,
+        return self._register('ari', 'ari', path, owner,
+                              None, None, None, name,
                               is_public, architecture,
                               auth_token=auth_token)
 

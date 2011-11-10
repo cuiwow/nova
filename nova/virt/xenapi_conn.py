@@ -521,6 +521,9 @@ class HostState(object):
             data["host_memory_free_computed"] = \
                         host_memory.get('free-computed', 0)
             del data['host_memory']
+        # TODO(sateesh): Going forward we might have to support hypervisor
+        # version and flavor information as well.
+        data['hypervisor'] = 'xenserver'
         self._stats = data
 
 

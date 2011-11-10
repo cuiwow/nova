@@ -46,6 +46,7 @@ from nova.virt import driver
 from nova.virt.vmwareapi import error_util
 from nova.virt.vmwareapi import vim
 from nova.virt.vmwareapi import vim_util
+from nova.virt.vmwareapi import vm_util
 from nova.virt.vmwareapi.vmops import VMWareVMOps
 
 
@@ -111,9 +112,16 @@ class VMWareESXConnection(driver.ComputeDriver):
     def __init__(self, host_ip, host_username, host_password,
                  api_retry_count, scheme="https"):
         super(VMWareESXConnection, self).__init__()
-        session = VMWareAPISession(host_ip, host_username, host_password,
+        self.session = VMWareAPISession(host_ip, host_username, host_password,
                                    api_retry_count, scheme=scheme)
-        self._vmops = VMWareVMOps(session)
+        self._vmops = VMWareVMOps(self.session)
+        self._host_state = None
+
+    @property
+    def HostState(self):
+        if not self._host_state:
+            self._host_state = HostState(self.session)
+        return self._host_state
 
     def init_host(self, host):
         """Do the initialization that needs to be done."""
@@ -203,6 +211,18 @@ class VMWareESXConnection(driver.ComputeDriver):
     def plug_vifs(self, instance, network_info):
         """Plugs in VIFs to networks."""
         self._vmops.plug_vifs(instance, network_info)
+
+    def update_host_status(self):
+        """Update the status info of the host, and return those values
+        to the calling program.
+        """
+        return self.HostState.update_status()
+
+    def get_host_stats(self, refresh=False):
+        """Return the current state of the host. If 'refresh' is
+        True, run the update first.
+        """
+        return self.HostState.get_host_stats(refresh=refresh)
 
 
 class VMWareAPISession(object):
@@ -390,3 +410,54 @@ class VMWareAPISession(object):
         except Exception, excep:
             LOG.warn(_("In vmwareapi:_poll_task, Got this error %s") % excep)
             done.send_exception(excep)
+
+
+class HostState(object):
+    """Manages information about the VMware ESX(i) host known to
+    this compute node.
+    """
+    def __init__(self, session):
+        super(HostState, self).__init__()
+        self._session = session
+        self._stats = {}
+        self.update_status()
+
+    def get_host_stats(self, refresh=False):
+        """Return the current state of the host. If 'refresh' is
+        True, run the update first.
+        """
+        if refresh:
+            self.update_status()
+        return self._stats
+
+    def update_status(self):
+        """Get host status information using vmware vi api."""
+        LOG.debug(_("Updating host stats"))
+        # TODO(sateesh): Going forward we might have to support hypervisor
+        # version and flavor information as well.
+        datastore_ref = vm_util.get_local_datastore(self._session, vim_util)
+        datastore_freespace = self._session._call_method(vim_util,
+                                                        "get_dynamic_property",
+                                                        datastore_ref,
+                                                        "Datastore",
+                                                        'summary.freeSpace')
+        host_infos = self._session._call_method(vim_util, "get_objects",
+                                 "HostSystem",
+                                 ['summary.hardware.memorySize',
+                                 'summary.quickStats.overallMemoryUsage'])
+        host_properties_dict = host_infos[0].propSet
+        for property in host_properties_dict:
+            if property.name == 'summary.hardware.memorySize':
+                memory_total = property.val / (1024 * 1024)
+            elif property.name == 'summary.quickStats.overallMemoryUsage':
+                memory_usage = property.val
+
+        data = {}
+        data['hypervisor'] = 'esx'
+        # Free Memory (MB) in ESX(i) host
+        data['host_memory_free'] = memory_total - memory_usage
+        # Free Disk space in ESX(i) host
+        data['disk_available'] = datastore_freespace
+        data['hypervisor'] = 'esx'
+        self._stats = data
+        LOG.debug(_("host stats : %s") % self._stats)

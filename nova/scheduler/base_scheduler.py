@@ -39,15 +39,25 @@ class BaseScheduler(abstract_scheduler.AbstractScheduler):
         filter_name = request_spec.get('filter', None)
         # Make sure that the requested filter is legitimate.
         selected_filter = host_filter.choose_host_filter(filter_name)
+        LOG.debug(_("Using %s to filter hosts.") % selected_filter)
 
         # TODO(sandy): We're only using InstanceType-based specs
         # currently. Later we'll need to snoop for more detailed
         # host filter requests.
-        instance_type = request_spec.get("instance_type", None)
-        if instance_type is None:
-            # No way to select; return the specified hosts
-            return hosts or []
-        name, query = selected_filter.instance_type_to_filter(instance_type)
+        query = None
+        if selected_filter.__class__.__name__ == 'InstanceMetadataFilter':
+            if request_spec is None:
+                return hosts or []
+            name, query = selected_filter.instance_metadata_to_filter(
+                                                    request_spec)
+            LOG.debug(_("filter %s.") % selected_filter.__class__.__name__)
+        else:
+            instance_type = request_spec.get("instance_type", None)
+            if instance_type is None:
+                # No way to select; return the specified hosts
+                return hosts or []
+            name, query = selected_filter.instance_type_to_filter(
+                                                            instance_type)
         return selected_filter.filter_hosts(self.zone_manager, query)
 
     def weigh_hosts(self, topic, request_spec, hosts):

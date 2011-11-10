@@ -34,3 +34,4 @@ from abstract_filter import AbstractHostFilter
 from all_hosts_filter import AllHostsFilter
 from instance_type_filter import InstanceTypeFilter
 from json_filter import JsonFilter
+from instance_metadata_filter import InstanceMetadataFilter

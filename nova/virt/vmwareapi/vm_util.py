@@ -323,3 +323,21 @@ def get_add_vswitch_port_group_spec(client_factory, vswitch_name,
 
     vswitch_port_group_spec.policy = policy
     return vswitch_port_group_spec
+
+
+def get_local_datastore(session, vim_util):
+    """Get the MOR to first local vmfs datastore."""
+    default_datastore = None
+    data_stores = session._call_method(vim_util, "get_objects",
+                        "Datastore",
+                        ["summary.type", "summary.datastore"])
+    for ds in data_stores:
+        for prop in ds.propSet:
+            if prop.name == "summary.type":
+                ds_type = prop.val
+            elif prop.name == "summary.datastore":
+                ds_mor = prop.val
+        if ds_type == "VMFS":
+            default_datastore = ds_mor
+            break
+    return default_datastore

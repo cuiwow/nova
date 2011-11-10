@@ -220,6 +220,9 @@ class API(base.Base):
         vm_mode = None
         if 'properties' in image and 'vm_mode' in image['properties']:
             vm_mode = image['properties']['vm_mode']
+        hypervisor = None
+        if 'properties' in image and 'hypervisor' in image['properties']:
+            hypervisor = image['properties']['hypervisor']
 
         if kernel_id is None:
             kernel_id = image['properties'].get('kernel_id', None)
@@ -282,6 +285,7 @@ class API(base.Base):
             'os_type': os_type,
             'architecture': architecture,
             'vm_mode': vm_mode,
+            'hypervisor': hypervisor,
             'root_device_name': root_device_name}
 
         return (num_instances, base_options, image)
