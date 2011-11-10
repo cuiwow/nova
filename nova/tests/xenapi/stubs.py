@@ -71,14 +71,6 @@ def stubout_session(stubs, cls):
                        fake_import)
 
 
-def stub_out_get_target(stubs):
-    """Stubs out _get_target in volume_utils"""
-    def fake_get_target(volume_id):
-        return (None, None)
-
-    stubs.Set(volume_utils, '_get_target', fake_get_target)
-
-
 def stubout_get_this_vm_uuid(stubs):
     def f():
         vms = [rec['uuid'] for ref, rec

@@ -219,6 +219,14 @@ class VolumeDriver(object):
            True, run the update first."""
         return None
 
+    def setup_vol_params(self, context, volume_id):
+        """ Setup implementation specific parameters for attach"""
+        pass
+
+    def do_setup(self, context):
+        """Any initialization the volume driver does while starting"""
+        pass
+
 
 class AOEDriver(VolumeDriver):
     """WARNING! Deprecated. This driver will be removed in Essex. Its use
@@ -592,6 +600,12 @@ class ISCSIDriver(VolumeDriver):
             logging.error(_("Cannot confirm exported volume "
                             "id:%(volume_id)s.") % locals())
             raise
+
+    def setup_vol_params(self, context, volume):
+        """Set implementation specific parameters"""
+        iscsi_properties = self._get_iscsi_properties(volume)
+        iscsi_properties['id'] = volume['id']
+        return iscsi_properties
 
 
 class FakeISCSIDriver(ISCSIDriver):

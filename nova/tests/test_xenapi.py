@@ -74,7 +74,6 @@ class XenAPIVolumeTestCase(test.TestCase):
                 xenapi_connection_url='test_url',
                 xenapi_connection_password='test_pass')
         db_fakes.stub_out_db_instance_api(self.stubs)
-        stubs.stub_out_get_target(self.stubs)
         xenapi_fake.reset()
         self.values = {'id': 1,
                   'project_id': self.user_id,
@@ -99,35 +98,6 @@ class XenAPIVolumeTestCase(test.TestCase):
         vol['attach_status'] = "detached"
         return db.volume_create(self.context, vol)
 
-    def test_create_iscsi_storage(self):
-        """This shows how to test helper classes' methods."""
-        stubs.stubout_session(self.stubs, stubs.FakeSessionForVolumeTests)
-        session = xenapi_conn.XenAPISession('test_url', 'root', 'test_pass')
-        helper = volume_utils.VolumeHelper
-        helper.XenAPI = session.get_imported_xenapi()
-        vol = self._create_volume()
-        info = helper.parse_volume_info(vol['id'], '/dev/sdc')
-        label = 'SR-%s' % vol['id']
-        description = 'Test-SR'
-        sr_ref = helper.create_iscsi_storage(session, info, label, description)
-        srs = xenapi_fake.get_all('SR')
-        self.assertEqual(sr_ref, srs[0])
-        db.volume_destroy(context.get_admin_context(), vol['id'])
-
-    def test_parse_volume_info_raise_exception(self):
-        """This shows how to test helper classes' methods."""
-        stubs.stubout_session(self.stubs, stubs.FakeSessionForVolumeTests)
-        session = xenapi_conn.XenAPISession('test_url', 'root', 'test_pass')
-        helper = volume_utils.VolumeHelper
-        helper.XenAPI = session.get_imported_xenapi()
-        vol = self._create_volume()
-        # oops, wrong mount point!
-        self.assertRaises(volume_utils.StorageError,
-                          helper.parse_volume_info,
-                          vol['id'],
-                          '/dev/sd')
-        db.volume_destroy(context.get_admin_context(), vol['id'])
-
     def test_attach_volume(self):
         """This shows how to test Ops classes' methods."""
         stubs.stubout_session(self.stubs, stubs.FakeSessionForVolumeTests)
@@ -135,7 +105,15 @@ class XenAPIVolumeTestCase(test.TestCase):
         volume = self._create_volume()
         instance = db.instance_create(self.context, self.values)
         vm = xenapi_fake.create_vm(instance.name, 'Running')
-        result = conn.attach_volume(instance.name, volume['id'], '/dev/sdc')
+        fake_dev_params = {}
+        fake_dev_params['target_portal'] = '127.0.0.1:3260'
+        fake_dev_params['id'] = volume['id']
+        fake_dev_params['target_iqn'] = 'iqn.2010-10.org.openstack:vol-%08x' \
+                                        % volume['id']
+        result = conn.attach_volume(instance.name,
+                                    volume['id'],
+                                    '/dev/sdc',
+                                    fake_dev_params)
 
         def check():
             # check that the VM has a VBD attached to it
@@ -729,7 +707,6 @@ class XenAPIMigrateInstance(test.TestCase):
                 xenapi_connection_url='test_url',
                 xenapi_connection_password='test_pass')
         db_fakes.stub_out_db_instance_api(self.stubs)
-        stubs.stub_out_get_target(self.stubs)
         xenapi_fake.reset()
         xenapi_fake.create_network('fake', FLAGS.flat_network_bridge)
         self.user_id = 'fake'

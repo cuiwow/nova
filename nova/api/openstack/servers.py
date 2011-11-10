@@ -994,6 +994,11 @@ class ServerXMLSerializer(wsgi.XMLDictSerializer):
         # assumes all actions return a server entity
         return self.create(server_dict)
 
+    def action(self, server_dict):
+        #NOTE(bcwaldon): We need a way to serialize actions individually. This
+        # assumes all actions return a server entity
+        return self.create(server_dict)
+
     def update(self, server_dict):
         xml_doc = minidom.Document()
         node = self._server_to_xml_detailed(xml_doc,

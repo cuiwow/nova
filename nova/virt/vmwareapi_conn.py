@@ -173,7 +173,8 @@ class VMWareESXConnection(driver.ComputeDriver):
         """Return link to instance's ajax console."""
         return self._vmops.get_ajax_console(instance)
 
-    def attach_volume(self, instance_name, device_path, mountpoint):
+    def attach_volume(self, instance_name, device_path, mountpoint,
+                      dev_params=None):
         """Attach volume storage to VM instance."""
         pass
 

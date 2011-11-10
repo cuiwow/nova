@@ -1266,10 +1266,13 @@ class ComputeManager(manager.SchedulerDependentManager):
                 " to %(mountpoint)s") % locals(), context=context)
         dev_path = self.volume_manager.setup_compute_volume(context,
                                                             volume_id)
+        dev_params = self.volume_manager.setup_vol_params(context,
+                                                          volume_id)
         try:
             self.driver.attach_volume(instance_ref['name'],
                                       dev_path,
-                                      mountpoint)
+                                      mountpoint,
+                                      dev_params)
             self.db.volume_attached(context,
                                     volume_id,
                                     instance_id,

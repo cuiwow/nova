@@ -285,11 +285,13 @@ class XenAPIConnection(driver.ComputeDriver):
         xs_url = urlparse.urlparse(FLAGS.xenapi_connection_url)
         return xs_url.netloc
 
-    def attach_volume(self, instance_name, device_path, mountpoint):
+    def attach_volume(self, instance_name, device_path, mountpoint,
+                      dev_params):
         """Attach volume storage to VM instance"""
         return self._volumeops.attach_volume(instance_name,
                                                device_path,
-                                               mountpoint)
+                                               mountpoint,
+                                               dev_params)
 
     def detach_volume(self, instance_name, mountpoint):
         """Detach volume storage to VM instance"""

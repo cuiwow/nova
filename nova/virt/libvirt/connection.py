@@ -341,7 +341,8 @@ class LibvirtConnection(driver.ComputeDriver):
             shutil.rmtree(target)
 
     @exception.wrap_exception()
-    def attach_volume(self, instance_name, device_path, mountpoint):
+    def attach_volume(self, instance_name, device_path, mountpoint,
+                      dev_params=None):
         virt_dom = self._lookup_by_name(instance_name)
         mount_device = mountpoint.rpartition("/")[2]
         (type, protocol, name) = \

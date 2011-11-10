@@ -153,7 +153,8 @@ class FakeConnection(driver.ComputeDriver):
             LOG.warning("Key '%s' not in instances '%s'" %
                         (key, self.instances))
 
-    def attach_volume(self, instance_name, device_path, mountpoint):
+    def attach_volume(self, instance_name, device_path, mountpoint,
+                      dev_params=None):
         if not instance_name in self._mounts:
             self._mounts[instance_name] = {}
         self._mounts[instance_name][mountpoint] = device_path

@@ -202,7 +202,8 @@ class ComputeDriver(object):
         # TODO(Vek): Need to pass context in for access to auth_token
         raise NotImplementedError()
 
-    def attach_volume(self, context, instance_id, volume_id, mountpoint):
+    def attach_volume(self, context, instance_id, volume_id, mountpoint,
+                      dev_params=None):
         """Attach the disk at device_path to the instance at mountpoint"""
         raise NotImplementedError()
 

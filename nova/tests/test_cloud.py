@@ -40,7 +40,7 @@ from nova.api.ec2 import cloud
 from nova.api.ec2 import ec2utils
 from nova.compute import vm_states
 from nova.image import fake
-
+from nova.volume import driver as volume_driver
 
 FLAGS = flags.FLAGS
 LOG = logging.getLogger('nova.tests.cloud')
@@ -1365,11 +1365,21 @@ class CloudTestCase(test.TestCase):
 
         self._restart_compute_service()
 
+    def _stub_setup_vol_params(self, context, volume):
+        fake_params = {}
+        fake_params['target_portal'] = '127.0.0.1:3260'
+        fake_params['id'] = volume['id']
+        fake_params['target_iqn'] = 'iqn.2010-10.org.openstack:volume-%08x' % \
+                                    volume['id']
+        return fake_params
+
     def test_stop_with_attached_volume(self):
         """Make sure attach info is reflected to block device mapping"""
         # enforce periodic tasks run in short time to avoid wait for 60s.
         self._restart_compute_service(periodic_interval=0.3)
 
+        self.stubs.Set(volume_driver.ISCSIDriver, 'setup_vol_params',
+                       self._stub_setup_vol_params)
         vol1 = self._volume_create()
         vol2 = self._volume_create()
         kwargs = {'image_id': 'ami-1',

@@ -474,7 +474,8 @@ class HyperVConnection(driver.ComputeDriver):
             LOG.error(msg)
             raise Exception(msg)
 
-    def attach_volume(self, instance_name, device_path, mountpoint):
+    def attach_volume(self, instance_name, device_path, mountpoint,
+                      dev_params=None):
         vm = self._lookup(instance_name)
         if vm is None:
             raise exception.InstanceNotFound(instance_id=instance_name)
