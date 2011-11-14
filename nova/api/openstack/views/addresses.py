@@ -48,6 +48,8 @@ class ViewBuilderV10(ViewBuilder):
 class ViewBuilderV11(ViewBuilder):
 
     def build(self, interfaces):
+        if interfaces is None:
+            return {}
         networks = {}
         for interface in interfaces:
             try:

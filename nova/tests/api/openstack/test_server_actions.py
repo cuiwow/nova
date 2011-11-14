@@ -502,6 +502,7 @@ class ServerActionsTestV11(test.TestCase):
 
         fakes.stub_out_glance(self.stubs)
         fakes.stub_out_compute_api_snapshot(self.stubs)
+        fakes.stub_out_build_addresses(self.stubs)
         service_class = 'nova.image.glance.GlanceImageService'
         self.service = utils.import_object(service_class)
         self.context = context.RequestContext(1, None)

@@ -252,6 +252,7 @@ class ServersTest(test.TestCase):
         fakes.stub_out_rate_limiting(self.stubs)
         fakes.stub_out_key_pair_funcs(self.stubs)
         fakes.stub_out_image_service(self.stubs)
+        fakes.stub_out_build_addresses(self.stubs)
         self.stubs.Set(utils, 'gen_uuid', fake_gen_uuid)
         self.stubs.Set(nova.db.api, 'instance_get_all_by_filters',
                 return_servers)
@@ -3660,6 +3661,8 @@ class TestGetKernelRamdiskFromImage(test.TestCase):
 class ServersViewBuilderV11Test(test.TestCase):
 
     def setUp(self):
+        super(ServersViewBuilderV11Test, self).setUp()
+        fakes.stub_out_build_addresses(self.stubs)
         self.instance = self._get_instance()
         self.view_builder = self._get_view_builder()
 

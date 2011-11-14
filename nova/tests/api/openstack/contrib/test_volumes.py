@@ -47,6 +47,7 @@ class BootFromVolumeTest(test.TestCase):
     def setUp(self):
         super(BootFromVolumeTest, self).setUp()
         self.stubs.Set(nova.compute.API, 'create', fake_compute_api_create)
+        fakes.stub_out_build_addresses(self.stubs)
 
     def test_create_root_volume(self):
         body = dict(server=dict(

@@ -20,6 +20,7 @@ import datetime
 import hashlib
 import os
 
+from nova import context
 from nova import exception
 from nova.api.openstack import common
 from nova.api.openstack.views import addresses as addresses_view
@@ -27,6 +28,7 @@ from nova.api.openstack.views import flavors as flavors_view
 from nova.api.openstack.views import images as images_view
 from nova import utils
 from nova.compute import vm_states
+from nova.network import api as network_api
 
 
 class ViewBuilder(object):
@@ -38,6 +40,7 @@ class ViewBuilder(object):
     """
 
     def __init__(self, addresses_builder):
+        self.network_api = network_api.API()
         self.addresses_builder = addresses_builder
 
     def build(self, inst, is_detail):
@@ -181,7 +184,8 @@ class ViewBuilderV11(ViewBuilder):
             }
 
     def _build_addresses(self, response, inst):
-        interfaces = inst.get('virtual_interfaces', [])
+        ctxt = context.get_admin_context()
+        interfaces = self.network_api.get_vifs_by_instance(ctxt, inst['id'])
         response['addresses'] = self.addresses_builder.build(interfaces)
 
     def _build_extra(self, response, inst):

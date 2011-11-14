@@ -173,6 +173,7 @@ class CreateserverextTest(test.TestCase):
 
     def _run_create_instance_with_mock_compute_api(self, request):
         compute_api = self._setup_mock_compute_api()
+        fakes.stub_out_build_addresses(self.stubs)
         response = request.get_response(fakes.wsgi_app())
         return compute_api, response
 
@@ -387,6 +388,7 @@ class CreateserverextTest(test.TestCase):
                        return_instance_add_security_group)
         body_dict = self._create_security_group_request_dict(security_groups)
         request = self._get_create_request_json(body_dict)
+        fakes.stub_out_build_addresses(self.stubs)
         response = request.get_response(fakes.wsgi_app())
         self.assertEquals(response.status_int, 202)
 
@@ -394,6 +396,7 @@ class CreateserverextTest(test.TestCase):
         self.stubs.Set(nova.db.api, 'instance_get', return_server_by_id)
         req = webob.Request.blank('/v1.1/123/os-create-server-ext/1')
         req.headers['Content-Type'] = 'application/json'
+        fakes.stub_out_build_addresses(self.stubs)
         response = req.get_response(fakes.wsgi_app())
         self.assertEquals(response.status_int, 200)
         res_dict = json.loads(response.body)
@@ -405,6 +408,7 @@ class CreateserverextTest(test.TestCase):
         self.stubs.Set(nova.db.api, 'instance_get', return_server_by_id)
         req = webob.Request.blank('/v1.1/123/os-create-server-ext/1')
         req.headers['Accept'] = 'application/xml'
+        fakes.stub_out_build_addresses(self.stubs)
         response = req.get_response(fakes.wsgi_app())
         self.assertEquals(response.status_int, 200)
         dom = minidom.parseString(response.body)

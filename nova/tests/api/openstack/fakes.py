@@ -28,6 +28,7 @@ from glance.common import exception as glance_exc
 
 from nova import context
 from nova import exception as exc
+from nova import flags
 from nova import utils
 from nova import wsgi
 import nova.api.openstack.auth
@@ -433,3 +434,38 @@ class FakeRateLimiter(object):
     @webob.dec.wsgify
     def __call__(self, req):
         return self.application
+
+
+def _build_addresses(self, response, inst):
+    def ipv4(addr):
+        return {'version': 4, 'addr': addr}
+
+    def ipv6(addr):
+        return {'version': 6, 'addr': addr}
+
+    interfaces = inst.get('virtual_interfaces', {})
+    if interfaces:
+        response['addresses'] = {}
+        for iface in interfaces:
+            if ('network' not in iface or
+                not iface['network'] or
+                'label' not in iface['network']):
+                # Malformed.  There's a negative test for this.
+                continue
+            label = iface['network']['label']
+            if label not in response['addresses']:
+                response['addresses'][label] = []
+            for ip in iface.get('fixed_ips', []):
+                response['addresses'][label].append(ipv4(ip['address']))
+            if flags.FLAGS.use_ipv6:
+                v6 = iface.get('fixed_ipv6')
+                if v6:
+                    response['addresses'][label].append(ipv6(v6))
+    else:
+        response['addresses'] = {}
+
+
+def stub_out_build_addresses(stubs):
+    stubs.Set(
+        nova.api.openstack.views.servers.ViewBuilderV11,
+        '_build_addresses', _build_addresses)
