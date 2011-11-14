@@ -113,7 +113,8 @@ def fake_ask_child_zone_to_create_instance(context, zone_info,
     was_called = True
 
 
-def fake_provision_resource_locally(context, build_plan, request_spec, kwargs):
+def fake_provision_resource_locally(context, build_plan, instance_id,
+                                    request_spec, kwargs):
     global was_called
     was_called = True
 
@@ -308,6 +309,8 @@ class AbstractSchedulerTestCase(test.TestCase):
 
         self.stubs.Set(sched, '_decrypt_blob',
                        fake_decrypt_blob_returns_local_info)
+        self.stubs.Set(sched, '_provision_resource_locally',
+                       fake_provision_resource_locally)
         self.stubs.Set(compute_api.API,
                 'create_db_entry_for_new_instance',
                 fake_create_db_entry_for_new_instance)

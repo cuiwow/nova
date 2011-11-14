@@ -34,6 +34,7 @@ from nova import exception
 from nova import flags
 from nova import log as logging
 from nova import rpc
+from nova import utils
 
 from nova.compute import api as compute_api
 from nova.scheduler import api
@@ -57,7 +58,7 @@ class AbstractScheduler(driver.Scheduler):
         return api.call_zone_method(context, method, specs=specs, zones=zones)
 
     def _provision_resource_locally(self, context, build_plan_item,
-            request_spec, kwargs):
+            instance_id, request_spec, kwargs):
         """Create the requested resource in this Zone."""
         host = build_plan_item['hostname']
         base_options = request_spec['instance_properties']
@@ -67,10 +68,13 @@ class AbstractScheduler(driver.Scheduler):
         # TODO(sandy): I guess someone needs to add block_device_mapping
         # support at some point? Also, OS API has no concept of security
         # groups.
-        instance = compute_api.API().create_db_entry_for_new_instance(context,
-                instance_type, image, base_options, None, [])
+        #instance = compute_api.API().create_db_entry_for_new_instance(context,
+        #        instance_type, image, base_options, None, [])
 
-        instance_id = instance['id']
+        #instance_id = instance['id']
+        now = utils.utcnow()
+        db.instance_update(context, instance_id, {'host': host,
+                                                  'scheduled_at': now})
         kwargs['instance_id'] = instance_id
 
         queue = db.queue_get_for(context, "compute", host)
@@ -167,15 +171,15 @@ class AbstractScheduler(driver.Scheduler):
             self._ask_child_zone_to_create_instance(context, host_info,
                     request_spec, kwargs)
         else:
-            self._provision_resource_locally(context, host_info, request_spec,
-                    kwargs)
+            self._provision_resource_locally(context, host_info, instance_id,
+                    request_spec, kwargs)
 
     def _provision_resource(self, context, build_plan_item, instance_id,
             request_spec, kwargs):
         """Create the requested resource in this Zone or a child zone."""
         if "hostname" in build_plan_item:
             self._provision_resource_locally(context, build_plan_item,
-                    request_spec, kwargs)
+                    instance_id, request_spec, kwargs)
             return
         self._provision_resource_from_blob(context, build_plan_item,
                 instance_id, request_spec, kwargs)
