@@ -47,6 +47,9 @@ flags.DEFINE_integer('block_size', 1024 * 1024 * 256,
 flags.DEFINE_string('injected_network_template',
                     utils.abspath('virt/interfaces.template'),
                     'Template file for injected network')
+flags.DEFINE_string('injected_dns_template',
+                    utils.abspath('virt/resolv.conf.template'),
+                    'Template file for injected dns info')
 flags.DEFINE_integer('timeout_nbd', 10,
                      'time to wait for a NBD device coming up')
 flags.DEFINE_integer('max_nbd_devices', 16,
@@ -105,7 +108,7 @@ def extend(image, size):
     utils.execute('resize2fs', image, check_exit_code=False)
 
 
-def inject_data(image, key=None, net=None, metadata=None,
+def inject_data(image, key=None, net=None, dns=None, metadata=None,
                 partition=None, nbd=False, tune2fs=True):
     """Injects a ssh key and optionally net data into a disk image.
 
@@ -149,7 +152,7 @@ def inject_data(image, key=None, net=None, metadata=None,
                                           % err)
 
                 try:
-                    inject_data_into_fs(tmpdir, key, net, metadata,
+                    inject_data_into_fs(tmpdir, key, net, dns, metadata,
                                         utils.execute)
                 finally:
                     # unmount device
@@ -254,7 +257,7 @@ def _free_device(device):
     _DEVICES.append(device)
 
 
-def inject_data_into_fs(fs, key, net, metadata, execute):
+def inject_data_into_fs(fs, key, net, dns, metadata, execute):
     """Injects data into a filesystem already mounted by the caller.
     Virt connections can call this directly if they mount their fs
     in a different way to inject_data
@@ -263,6 +266,8 @@ def inject_data_into_fs(fs, key, net, metadata, execute):
         _inject_key_into_fs(key, fs, execute=execute)
     if net:
         _inject_net_into_fs(net, fs, execute=execute)
+    if dns:
+        _inject_dns_into_fs(dns, fs, execute=execute)
     if metadata:
         _inject_metadata_into_fs(metadata, fs, execute=execute)
 
@@ -301,3 +306,19 @@ def _inject_net_into_fs(net, fs, execute=None):
     utils.execute('chmod', 755, netdir, run_as_root=True)
     netfile = os.path.join(netdir, 'interfaces')
     utils.execute('tee', netfile, process_input=net, run_as_root=True)
+
+
+def _inject_dns_into_fs(dns, fs, execute=None):
+    """Inject /etc/resolv.conf into the filesystem rooted at fs.
+
+    dns is the contents of such file. Injection of /etc/resolv,conf
+    is performed only if the instance does not loads them
+    automatically through resolvconf.
+    """
+    resolvconf_filename = os.path.join(os.path.join(fs, 'sbin'), 'resolvconf')
+    
+    if not os.path.isfile(resolvconf_filename):
+        dnsfile = os.path.join(os.path.join(fs, 'etc'), 'resolv.conf')
+        utils.execute('chown', 'root:root', dnsfile, run_as_root=True)
+        utils.execute('chmod', 755, dnsfile, run_as_root=True)
+        utils.execute('tee', dnsfile, process_input=dns, run_as_root=True)

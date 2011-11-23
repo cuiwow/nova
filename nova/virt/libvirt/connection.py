@@ -953,9 +953,11 @@ class LibvirtConnection(driver.ComputeDriver):
         else:
             key = None
         net = None
+        dns = None
 
         nets = []
         ifc_template = open(FLAGS.injected_network_template).read()
+        dns_template = open(FLAGS.injected_dns_template).read()
         ifc_num = -1
         have_injected_networks = False
         admin_context = nova_context.get_admin_context()
@@ -990,6 +992,8 @@ class LibvirtConnection(driver.ComputeDriver):
             net = str(Template(ifc_template,
                                searchList=[{'interfaces': nets,
                                             'use_ipv6': FLAGS.use_ipv6}]))
+            dns = str(Template(dns_template,
+                               searchList=[{'interfaces': nets}]))
 
         metadata = inst.get('metadata')
         if any((key, net, metadata)):
@@ -1010,7 +1014,9 @@ class LibvirtConnection(driver.ComputeDriver):
                                '%(injection)s into image %(img_id)s'
                                % locals()))
             try:
-                disk.inject_data(injection_path, key, net, metadata,
+                disk.inject_data(injection_path, key, net,
+                                 dns=dns,
+                                 metata=metadata,
                                  partition=target_partition,
                                  nbd=FLAGS.use_cow_images,
                                  tune2fs=tune2fs)
