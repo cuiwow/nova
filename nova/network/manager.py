@@ -250,7 +250,10 @@ class FloatingIP(object):
         LOG.debug(_("floating IP deallocation for instance |%s|"), instance_id,
                                                                context=context)
 
-        fixed_ips = self.db.fixed_ip_get_by_instance(context, instance_id)
+        try:
+            fixed_ips = self.db.fixed_ip_get_by_instance(context, instance_id)
+        except exception.FixedIpNotFoundForInstance:
+            fixed_ips = []
         # add to kwargs so we can pass to super to save a db lookup there
         kwargs['fixed_ips'] = fixed_ips
         for fixed_ip in fixed_ips:
@@ -835,15 +838,18 @@ class NetworkManager(manager.SchedulerDependentManager):
         top_reserved = self._top_reserved_ips
         project_net = netaddr.IPNetwork(network['cidr'])
         num_ips = len(project_net)
+        ips = []
         for index in range(num_ips):
             address = str(project_net[index])
-            if index < bottom_reserved or num_ips - index < top_reserved:
+            if index < bottom_reserved or num_ips - index <= top_reserved:
                 reserved = True
             else:
                 reserved = False
-            self.db.fixed_ip_create(context, {'network_id': network_id,
-                                              'address': address,
-                                              'reserved': reserved})
+
+            ips.append({'network_id': network_id,
+                        'address': address,
+                        'reserved': reserved})
+        self.db.fixed_ip_bulk_create(context, ips)
 
     def _allocate_fixed_ips(self, context, instance_id, host, networks,
                             **kwargs):

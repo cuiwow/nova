@@ -750,6 +750,16 @@ def fixed_ip_create(_context, values):
 
 
 @require_context
+def fixed_ip_bulk_create(_context, ips):
+    session = get_session()
+    with session.begin():
+        for ip in ips:
+            model = models.FixedIp()
+            model.update(ip)
+            session.add(model)
+
+
+@require_context
 def fixed_ip_disassociate(context, address):
     session = get_session()
     with session.begin():
@@ -1754,6 +1764,7 @@ def network_count_reserved_ips(context, network_id):
 @require_admin_context
 def network_create_safe(context, values):
     network_ref = models.Network()
+    network_ref['uuid'] = str(utils.gen_uuid())
     network_ref.update(values)
     try:
         network_ref.save()

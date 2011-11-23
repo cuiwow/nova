@@ -210,6 +210,17 @@ class FlatNetworkTestCase(test.TestCase):
         self.mox.ReplayAll()
         self.network.validate_networks(self.context, requested_networks)
 
+    def test_validate_reserved(self):
+        context_admin = context.RequestContext('testuser', 'testproject',
+                                              is_admin=True)
+        nets = self.network.create_networks(context_admin, 'fake',
+                                       '192.168.0.0/24', False, 1,
+                                       256, None, None, None, None )
+        self.assertEqual(1, len(nets))
+        network = nets[0]
+        self.assertEqual(3, db.network_count_reserved_ips(context_admin,
+                        network['id']))
+
     def test_validate_networks_none_requested_networks(self):
         self.network.validate_networks(self.context, None)
 
@@ -718,3 +729,30 @@ class CommonNetworkTestCase(test.TestCase):
         args = [None, 'foo', cidr, None, 10, 256, 'fd00::/48', None, None,
                 None]
         self.assertTrue(manager.create_networks(*args))
+
+
+class TestFloatingIPManager(network_manager.FloatingIP,
+        network_manager.NetworkManager):
+    """Dummy manager that implements FloatingIP"""
+
+
+class FloatingIPTestCase(test.TestCase):
+    """Tests nova.network.manager.FloatingIP"""
+    def setUp(self):
+        super(FloatingIPTestCase, self).setUp()
+        self.network = TestFloatingIPManager()
+        self.network.db = db
+        self.project_id = 'testproject'
+        self.context = context.RequestContext('testuser', self.project_id,
+            is_admin=False)
+
+    def test_double_deallocation(self):
+        instance_ref = db.api.instance_create(self.context,
+                {"project_id": self.project_id})
+        # Run it twice to make it fault if it does not handle
+        # instances without fixed networks
+        # If this fails in either, it does not handle having no addresses
+        self.network.deallocate_for_instance(self.context,
+                instance_id=instance_ref['id'])
+        self.network.deallocate_for_instance(self.context,
+                instance_id=instance_ref['id'])
