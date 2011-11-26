@@ -256,7 +256,7 @@ class FakeSessionForFirewallTests(FakeSessionForVMTests):
             cmd_args = args.get('cmd_args', None)
             cmd = json.loads(cmd_args)
             if not cmd:
-                ret_str = ''
+                raise Exception('Given no command to iptables_config')
             else:
                 output = ''
                 process_input = args.get('process_input', None)
