@@ -522,7 +522,7 @@ class XenAPIVMTestCase(test.TestCase):
             self.assertNotEqual(input, None)
             config = [line.strip() for line in input.split("\n")]
             # output should be single line with nameserver
-            self.assertEquals(config, 
+            self.assertEquals(config,
                               ['nameserver 192.168.0.1', ''])
             self._tee_resolv_conf_executed = True
             return '', ''
@@ -532,7 +532,7 @@ class XenAPIVMTestCase(test.TestCase):
             (r'tee.*interfaces', _tee_handler_interfaces),
             (r'tee.*resolv.*', _tee_handler_resolv_conf)
         ])
-        
+
         self._test_spawn(glance_stubs.FakeGlance.IMAGE_MACHINE,
                          glance_stubs.FakeGlance.IMAGE_KERNEL,
                          glance_stubs.FakeGlance.IMAGE_RAMDISK,

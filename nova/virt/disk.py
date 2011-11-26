@@ -316,7 +316,7 @@ def _inject_dns_into_fs(dns, fs, execute=None):
     automatically through resolvconf.
     """
     resolvconf_filename = os.path.join(os.path.join(fs, 'sbin'), 'resolvconf')
-    
+
     if not os.path.isfile(resolvconf_filename):
         dnsfile = os.path.join(os.path.join(fs, 'etc'), 'resolv.conf')
         utils.execute('chown', 'root:root', dnsfile, run_as_root=True)

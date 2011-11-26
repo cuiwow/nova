@@ -119,11 +119,11 @@ def stubout_determine_is_pv_objectstore(stubs):
     def f(cls, *args):
         return False
     stubs.Set(vm_utils.VMHelper, '_determine_is_pv_objectstore', f)
-    
-    
+
+
 def stub_os_path_isfile(stubs):
     """ This stub ensures we always injection in /etc/resolv.conf """
-    
+
     def fake_isfile(path):
 
         if re.match(r'.*resolvconf', path):
@@ -131,11 +131,10 @@ def stub_os_path_isfile(stubs):
         # retrieve original
         for item in stubs.cache:
             if item[2] == 'isfile':
-                return item[1](path)  
+                return item[1](path)
         return True
-    
-    stubs.Set(os.path, 'isfile', fake_isfile)
 
+    stubs.Set(os.path, 'isfile', fake_isfile)
 
 
 def stubout_lookup_image(stubs):
