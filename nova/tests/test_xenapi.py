@@ -398,6 +398,8 @@ class XenAPIVMTestCase(test.TestCase):
         if empty_dns:
             network_info[0][1]['dns'] = []
 
+        instance.injected_files = []
+        instance.admin_pass = None
         self.conn.spawn(self.context, instance, network_info)
         self.create_vm_record(self.conn, os_type, instance_id)
         self.check_vm_record(self.conn, check_injection)
@@ -689,6 +691,8 @@ class XenAPIVMTestCase(test.TestCase):
                            'mac': 'DE:AD:BE:EF:00:00',
                            'rxtx_cap': 3})]
         if spawn:
+            instance.injected_files = []
+            instance.admin_pass = None
             self.conn.spawn(self.context, instance, network_info)
         return instance
 

@@ -409,6 +409,7 @@ class VMOps(object):
                 LOG.warn(exc)
                 LOG.exception(_('Instance %s: failed to boot'), instance_name)
                 timer.stop()
+                self._destroy_vm(instance, vm_ref)
                 return False
 
         timer.f = _wait_for_boot
