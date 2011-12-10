@@ -143,10 +143,16 @@ class VMOps(object):
 
     def _create_disks(self, context, instance):
         disk_image_type = VMHelper.determine_disk_image_type(instance, context)
-        vdis = VMHelper.fetch_image(context, self._session,
+        if disk_image_type == ImageType.DISK_ISO:
+            vdis = VMHelper.fetch_image(context, self._session,
                 instance, instance.image_ref,
                 instance.user_id, instance.project_id,
                 disk_image_type)
+        else:
+            vdis = VMHelper.create_image(context, self._session,
+                instance, instance.image_ref,
+                instance.user_id, instance.project_id,
+                disk_image_type, cow=FLAGS.use_cow_images)
 
         for vdi in vdis:
             if vdi["vdi_type"] == "os":
