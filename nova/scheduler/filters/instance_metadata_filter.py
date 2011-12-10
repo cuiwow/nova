@@ -38,6 +38,8 @@ class InstanceMetadataFilter(abstract_filter.AbstractHostFilter):
         # version of hypervisor etc.
         try:
             for key, value in instance_extra_specs.iteritems():
+                if key == 'hypervisor' and value == 'any':
+                    continue
                 if capabilities[key] != value:
                     return False
         except KeyError:
@@ -59,7 +61,8 @@ class InstanceMetadataFilter(abstract_filter.AbstractHostFilter):
                            instance_type['extra_specs']
 
             if ((instance_properties['hypervisor'] == \
-                 capabilities['hypervisor']) and \
+                 capabilities['hypervisor'] or \
+                 instance_properties['hypervisor'] == 'any') and \
                  self._satisfies_extra_specs(capabilities, extra_specs)):
                 selected_hosts.append((host, capabilities))
         return selected_hosts
