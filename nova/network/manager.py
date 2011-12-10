@@ -761,6 +761,8 @@ class NetworkManager(manager.SchedulerDependentManager):
 
             net['dns1'] = dns1
             net['dns2'] = dns2
+            if 'project_id' in kwargs:
+                net['project_id'] = kwargs['project_id']
 
             if num_networks > 1:
                 net['label'] = '%s_%d' % (label, index)
