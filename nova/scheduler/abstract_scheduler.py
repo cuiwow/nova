@@ -20,8 +20,9 @@ customize the behavior: filter_hosts() and weigh_hosts(). The default
 behavior is to simply select all hosts and weight them the same.
 """
 
-import operator
 import json
+import operator
+import random
 
 import M2Crypto
 
@@ -281,6 +282,8 @@ class AbstractScheduler(driver.Scheduler):
         # Filter local hosts based on requirements ...
         filtered_hosts = self.filter_hosts(topic, request_spec,
                 unfiltered_hosts)
+        # Shuffle the order of hosts in this zone
+        random.shuffle(filtered_hosts)
 
         # weigh the selected hosts.
         # weighted_hosts = [{weight=weight, hostname=hostname,
