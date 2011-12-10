@@ -504,6 +504,7 @@ class XenAPIVMTestCase(test.TestCase):
         self.check_vm_params_for_linux_with_external_kernel()
 
     def test_spawn_netinject_file(self):
+        self.flags(network_manager='nova.network.manager.FlatManager')
         self.flags(flat_injected=True)
         db_fakes.stub_out_db_instance_api(self.stubs, injected=True)
 

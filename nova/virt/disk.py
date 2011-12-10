@@ -264,9 +264,10 @@ def inject_data_into_fs(fs, key, net, dns, metadata, execute):
     """
     if key:
         _inject_key_into_fs(key, fs, execute=execute)
-    if net:
+    # do net and dns injection only in flat mode!
+    if net and FLAGS.network_manager == 'nova.network.manager.FlatManager':
         _inject_net_into_fs(net, fs, execute=execute)
-    if dns:
+    if dns and FLAGS.network_manager == 'nova.network.manager.FlatManager':
         _inject_dns_into_fs(dns, fs, execute=execute)
     if metadata:
         _inject_metadata_into_fs(metadata, fs, execute=execute)
