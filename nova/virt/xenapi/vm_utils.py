@@ -559,6 +559,12 @@ class VMHelper(HelperBase):
         vdi_return_list = []
         new_vdi_uuid = None
 
+        if cow and sr_type != "ext":
+            LOG.warning(_("Fast cloning is only supported on default local SR "
+                          "of type ext. SR on this system was found to be of "
+                          "type %(sr_type)s. Ignoring the cow flag.")
+                          % locals())
+
         vdi_ref = cls.find_cached_image(session, image)
         if vdi_ref is None:
             vdis = cls.fetch_image(context, session, instance, image, user_id,
