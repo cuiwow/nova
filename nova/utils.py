@@ -39,6 +39,8 @@ import uuid
 import pyclbr
 from xml.sax import saxutils
 
+import netifaces
+
 from eventlet import event
 from eventlet import greenthread
 from eventlet import semaphore
@@ -935,3 +937,20 @@ def save_and_reraise_exception():
                       exc_info=(type_, value, traceback))
         raise
     raise type_, value, traceback
+
+
+def whataremyips():
+    """
+    Get the machine's ip addresses
+
+    :returns: list of Strings of ip addresses
+    """
+    addresses = []
+    for interface in netifaces.interfaces():
+        iface_data = netifaces.ifaddresses(interface)
+        for family in iface_data:
+            if family not in (netifaces.AF_INET, netifaces.AF_INET6):
+                continue
+            for address in iface_data[family]:
+                addresses.append(address['addr'])
+    return addresses

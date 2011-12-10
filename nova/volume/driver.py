@@ -58,6 +58,9 @@ flags.DEFINE_string('rbd_pool', 'rbd',
                     'the rbd pool in which volumes are stored')
 
 
+ISCSI_PORT = 3260
+
+
 class VolumeDriver(object):
     """Executes commands relating to Volumes."""
     def __init__(self, execute=utils.execute,
@@ -415,6 +418,19 @@ class ISCSIDriver(VolumeDriver):
                       '--tid=%s' % iscsi_target,
                       '--lun=0', '--params',
                       'Path=%s,Type=fileio' % volume_path, run_as_root=True)
+
+        model_update = {}
+        model_update['provider_location'] = _iscsi_location(
+            self._my_iscsi_ip(), iscsi_target, iscsi_name)
+        return model_update
+
+    def _my_iscsi_ip(self):
+        addrs = utils.whataremyips()
+        result = [x for x in addrs if x.startswith(FLAGS.iscsi_ip_prefix)]
+        if len(result) >= 1:
+            return result[0]
+        else:
+            raise Exception('--iscsi_ip_prefix does not match this host!')
 
     def remove_export(self, context, volume):
         """Removes an export for a logical volume."""
@@ -1040,12 +1056,10 @@ class ZadaraBEDriver(ISCSIDriver):
 
         sn_ip = response_node.findtext("SnIp")
         sn_iqn = response_node.findtext("IqnName")
-        iscsi_portal = sn_ip + ":3260," + ("%s" % iscsi_target)
 
         model_update = {}
-        model_update['provider_location'] = ("%s %s" %
-                                             (iscsi_portal,
-                                              sn_iqn))
+        model_update['provider_location'] = _iscsi_location(
+            sn_ip, iscsi_target, sn_iqn)
         return model_update
 
     def _get_qosgroup_summary(self):
@@ -1095,3 +1109,7 @@ class ZadaraBEDriver(ISCSIDriver):
 
         drive_info = self._get_qosgroup_summary()
         return {'drive_qos_info': drive_info}
+
+
+def _iscsi_location(ip, target, iqn):
+    return "%s:%s,%s %s" % (ip, ISCSI_PORT, target, iqn)
