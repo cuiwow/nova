@@ -1238,10 +1238,14 @@ def _stream_disk(dev, image_type, virtual_size, image_file):
 
     utils.execute('chown', os.getuid(), '/dev/%s' % dev, run_as_root=True)
 
-    with open('/dev/%s' % dev, 'wb') as f:
-        f.seek(offset)
-        for chunk in image_file:
-            f.write(chunk)
+    try:
+        with open('/dev/%s' % dev, 'wb') as f:
+            f.seek(offset)
+            for chunk in image_file:
+                f.write(chunk)
+    except Exception as exc:
+        LOG.exception(exc)
+        raise IOError
 
 
 def _write_partition(virtual_size, dev):
