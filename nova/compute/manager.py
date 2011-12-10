@@ -441,7 +441,12 @@ class ComputeManager(manager.SchedulerDependentManager):
                         "virtualization enabled in the BIOS? Details: "
                         "%(ex)s") % locals()
                 LOG.exception(msg)
-                _deallocate_network()
+                with utils.save_and_reraise_exception():
+                    self._instance_update(context,
+                                          instance_id,
+                                          vm_state=vm_states.ERROR)
+                if network_info is not None:
+                    _deallocate_network()
                 return
 
             current_power_state = self._get_power_state(context, instance)
