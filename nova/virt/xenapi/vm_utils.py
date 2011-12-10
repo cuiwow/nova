@@ -408,6 +408,29 @@ class VMHelper(HelperBase):
         return vdi_ref
 
     @classmethod
+    def create_kernel_image(cls, context, session, instance, image, user_id,
+                            project_id, image_type):
+        """Creates kernel/ramdisk file from the image stored in the cache.
+        If the image is not present in the cache, it streams it from glance.
+
+        Returns: A list of dictionaries that describe VDIs
+        """
+        args = {}
+        args['cached-image'] = '%08x' % int(image)
+        args['new-image-uuid'] = str(uuid.uuid4())
+        task = session.async_call_plugin('glance', "create_kernel_ramdisk",
+                                          args)
+        filename = session.wait_for_task(task, instance.id)
+
+        if filename == "":
+            return cls.fetch_image(context, session, instance, image,
+                                   user_id, project_id, image_type)
+        else:
+            return [dict(vdi_type=ImageType.to_string(image_type),
+                         vdi_uuid=None,
+                         file=filename)]
+
+    @classmethod
     def create_image(cls, context, session, instance, image, user_id,
                      project_id, image_type, cow=False):
         """Creates VDI from the image stored in the local cache. If the image
@@ -661,6 +684,7 @@ class VMHelper(HelperBase):
                 args['vdi-ref'] = vdi_ref
                 # Let the plugin copy the correct number of bytes.
                 args['image-size'] = str(vdi_size)
+                args['cached-image'] = '%08x' % int(image)
                 task = session.async_call_plugin('glance', fn, args)
                 filename = session.wait_for_task(task, instance_id)
                 # Remove the VDI as it is not needed anymore.
