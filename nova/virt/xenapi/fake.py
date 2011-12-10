@@ -215,7 +215,7 @@ def _create_local_sr(host_ref):
     sr_ref = _create_object(
              'SR',
              {'name_label': 'Local storage',
-              'type': 'lvm',
+              'type': 'ext',
               'content_type': 'user',
               'shared': False,
               'physical_size': str(1 << 30),
