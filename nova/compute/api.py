@@ -20,11 +20,18 @@
 """Handles all requests relating to instances (guest vms)."""
 
 import functools
-import novaclient
 import re
 import time
 
+import novaclient
+import webob.exc
+
 from nova import block_device
+from nova.compute import instance_types
+from nova.compute import power_state
+from nova.compute import task_states
+from nova.compute import vm_states
+from nova.db import base
 from nova import exception
 from nova import flags
 import nova.image
@@ -32,14 +39,9 @@ from nova import log as logging
 from nova import network
 from nova import quota
 from nova import rpc
+from nova.scheduler import api as scheduler_api
 from nova import utils
 from nova import volume
-from nova.compute import instance_types
-from nova.compute import power_state
-from nova.compute import task_states
-from nova.compute import vm_states
-from nova.scheduler import api as scheduler_api
-from nova.db import base
 
 
 LOG = logging.getLogger('nova.compute.api')
@@ -231,7 +233,7 @@ class API(base.Base):
         if 'properties' in image and 'vm_mode' in image['properties']:
             vm_mode = image['properties']['vm_mode']
 
-        # If instance doesn't have auto_disk_config overriden by request, use
+        # If instance doesn't have auto_disk_config overridden by request, use
         # whatever the image indicates
         if auto_disk_config is None:
             if ('properties' in image and
@@ -310,7 +312,7 @@ class API(base.Base):
                     context, instance_type, image, base_options,
                     security_group, block_device_mapping)
             # Tells scheduler we created the instance already.
-            base_options['id'] = instance['id']
+            base_options['uuid'] = instance['uuid']
             rpc_method = rpc.cast
         else:
             # We need to wait for the scheduler to create the instance
@@ -924,7 +926,7 @@ class API(base.Base):
     def get_all(self, context, search_opts=None):
         """Get all instances filtered by one of the given parameters.
 
-        If there is no filter and the context is an admin, it will retreive
+        If there is no filter and the context is an admin, it will retrieve
         all instances in the system.
 
         Deleted instances will be returned by default, unless there is a
@@ -1138,12 +1140,40 @@ class API(base.Base):
         properties.update(extra_properties or {})
         sent_meta = {'name': name, 'is_public': False,
                      'status': 'creating', 'properties': properties}
+
+        if image_type == 'snapshot':
+            min_ram, min_disk = self._get_minram_mindisk_params(context,
+                                                                instance)
+            if min_ram is not None:
+                sent_meta['min_ram'] = min_ram
+            if min_disk is not None:
+                sent_meta['min_disk'] = min_disk
+
         recv_meta = self.image_service.create(context, sent_meta)
         params = {'image_id': recv_meta['id'], 'image_type': image_type,
                   'backup_type': backup_type, 'rotation': rotation}
         self._cast_compute_message('snapshot_instance', context, instance_uuid,
                                    params=params)
         return recv_meta
+
+    def _get_minram_mindisk_params(self, context, instance):
+        try:
+            #try to get source image of the instance
+            orig_image = self.image_service.show(context,
+                                                 instance['image_ref'])
+        except webob.exc.HTTPNotFound:
+            return None, None
+
+        #disk format of vhd is non-shrinkable
+        if orig_image.get('disk_format') == 'vhd':
+            min_ram = instance['instance_type']['memory_mb']
+            min_disk = instance['instance_type']['local_gb']
+        else:
+            #set new image values to the original image values
+            min_ram = orig_image.get('min_ram')
+            min_disk = orig_image.get('min_disk')
+
+        return min_ram, min_disk
 
     @check_instance_state(vm_state=[vm_states.ACTIVE, vm_states.RESCUED],
                           task_state=[None, task_states.RESIZE_VERIFY])
@@ -1164,25 +1194,22 @@ class API(base.Base):
     @check_instance_state(vm_state=[vm_states.ACTIVE],
                           task_state=[None, task_states.RESIZE_VERIFY])
     @scheduler_api.reroute_compute("rebuild")
-    def rebuild(self, context, instance, image_href, admin_password,
-                name=None, metadata=None, files_to_inject=None):
-        """Rebuild the given instance with the provided metadata."""
-        name = name or instance["display_name"]
+    def rebuild(self, context, instance, image_href, admin_password, **kwargs):
+        """Rebuild the given instance with the provided attributes."""
 
-        files_to_inject = files_to_inject or []
-        metadata = metadata or {}
-
+        files_to_inject = kwargs.pop('files_to_inject', [])
         self._check_injected_file_quota(context, files_to_inject)
+
+        metadata = kwargs.get('metadata', {})
         self._check_metadata_properties_quota(context, metadata)
 
         self.update(context,
                     instance,
-                    metadata=metadata,
-                    display_name=name,
                     image_ref=image_href,
-                    vm_state=vm_states.ACTIVE,
-                    task_state=task_states.REBUILDING,
-                    progress=0)
+                    vm_state=vm_states.REBUILDING,
+                    task_state=None,
+                    progress=0,
+                    **kwargs)
 
         rebuild_params = {
             "new_pass": admin_password,
@@ -1486,11 +1513,12 @@ class API(base.Base):
                        'hostignore',
                        'portignore')}
 
-    def get_console_output(self, context, instance):
+    def get_console_output(self, context, instance, tail_length=None):
         """Get console output for an an instance."""
         return self._call_compute_message('get_console_output',
                                           context,
-                                          instance)
+                                          instance,
+                                          {'tail_length': tail_length})
 
     def lock(self, context, instance):
         """Lock the given instance."""
@@ -1555,7 +1583,7 @@ class API(base.Base):
         # accommodate the info containing floating as well as fixed ip
         # addresses
         fixed_ip_addrs = []
-        for info in self.network_api.get_instance_nw_info(context,
+        for info in self.network_api.get_instance_nw_info(context.elevated(),
                                                           instance):
             ips = info[1]['ips']
             fixed_ip_addrs.extend([ip_dict['ip'] for ip_dict in ips])
@@ -1601,3 +1629,8 @@ class API(base.Base):
         self.db.instance_metadata_update(context, instance['id'],
                                          _metadata, True)
         return _metadata
+
+    def get_instance_faults(self, context, instances):
+        """Get all faults for a list of instance uuids."""
+        uuids = [instance['uuid'] for instance in instances]
+        return self.db.instance_fault_get_by_instance_uuids(context, uuids)

@@ -25,7 +25,6 @@ import functools
 import inspect
 import json
 import lockfile
-import netaddr
 import os
 import random
 import re
@@ -43,11 +42,11 @@ from eventlet import event
 from eventlet import greenthread
 from eventlet import semaphore
 from eventlet.green import subprocess
+import netaddr
 
 from nova import exception
 from nova import flags
 from nova import log as logging
-from nova import version
 
 
 LOG = logging.getLogger("nova.utils")
@@ -169,6 +168,9 @@ def execute(*cmd, **kwargs):
 
     :raises exception.Error on receiving unknown arguments
     :raises exception.ProcessExecutionError
+
+    :returns a tuple, (stdout, stderr) from the spawned process, or None if
+             the command fails.
     """
 
     process_input = kwargs.pop('process_input', None)
@@ -233,6 +235,36 @@ def execute(*cmd, **kwargs):
             #               call clean something up in between calls, without
             #               it two execute calls in a row hangs the second one
             greenthread.sleep(0)
+
+
+def trycmd(*args, **kwargs):
+    """
+    A wrapper around execute() to more easily handle warnings and errors.
+
+    Returns an (out, err) tuple of strings containing the output of
+    the command's stdout and stderr.  If 'err' is not empty then the
+    command can be considered to have failed.
+
+    :discard_warnings   True | False. Defaults to False. If set to True,
+                        then for succeeding commands, stderr is cleared
+
+    """
+    discard_warnings = kwargs.pop('discard_warnings', False)
+
+    try:
+        out, err = execute(*args, **kwargs)
+        failed = False
+    except exception.ProcessExecutionError, exn:
+        out, err = '', str(exn)
+        LOG.debug(err)
+        failed = True
+
+    if not failed and discard_warnings and err:
+        # Handle commands that output to stderr but otherwise succeed
+        LOG.debug(err)
+        err = ''
+
+    return out, err
 
 
 def ssh_execute(ssh, cmd, process_input=None,
@@ -916,9 +948,11 @@ def is_uuid_like(val):
 
         aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
     """
-    if not isinstance(val, basestring):
+    try:
+        uuid.UUID(val)
+        return True
+    except (TypeError, ValueError, AttributeError):
         return False
-    return (len(val) == 36) and (val.count('-') == 4)
 
 
 def bool_from_str(val):
@@ -1055,7 +1089,7 @@ def save_and_reraise_exception():
     type_, value, traceback = sys.exc_info()
     try:
         yield
-    except:
+    except Exception:
         LOG.exception(_('Original exception being dropped'),
                       exc_info=(type_, value, traceback))
         raise
@@ -1110,3 +1144,17 @@ def sanitize_hostname(hostname):
     hostname = hostname.strip('.-')
 
     return hostname
+
+
+def read_cached_file(filename, cache_info):
+    """Return the contents of a file. If the file hasn't changed since the
+    last invocation, a cached version will be returned.
+    """
+    mtime = os.path.getmtime(filename)
+    if cache_info and mtime == cache_info.get('mtime', None):
+        return cache_info['data']
+
+    data = open(filename).read()
+    cache_info['data'] = data
+    cache_info['mtime'] = mtime
+    return data

@@ -20,9 +20,12 @@
 Tests For Compute
 """
 from copy import copy
+import datetime
+import time
 from webob import exc
 
 import mox
+import webob.exc
 
 import nova
 from nova import compute
@@ -176,6 +179,46 @@ class BaseTestCase(test.TestCase):
 
 
 class ComputeTestCase(BaseTestCase):
+
+    def test_wrap_instance_fault(self):
+        inst_uuid = "fake_uuid"
+
+        called = {'fault_added': False}
+
+        def did_it_add_fault(_ctxt, _inst_uuid, _e):
+            called['fault_added'] = True
+
+        self.stubs.Set(self.compute, 'add_instance_fault_from_exc',
+                       did_it_add_fault)
+
+        @nova.compute.manager.wrap_instance_fault
+        def failer(self2, context, instance_uuid):
+            raise NotImplementedError()
+
+        self.assertRaises(NotImplementedError, failer,
+                          self.compute, self.context, inst_uuid)
+
+        self.assertTrue(called['fault_added'])
+
+    def test_wrap_instance_fault_no_instance(self):
+        inst_uuid = "fake_uuid"
+
+        called = {'fault_added': False}
+
+        def did_it_add_fault(_ctxt, _inst_uuid, _e):
+            called['fault_added'] = True
+
+        self.stubs.Set(self.compute, 'add_instance_fault_from_exc',
+                       did_it_add_fault)
+
+        @nova.compute.manager.wrap_instance_fault
+        def failer(self2, context, instance_uuid):
+            raise exception.InstanceNotFound()
+
+        self.assertRaises(exception.InstanceNotFound, failer,
+                          self.compute, self.context, inst_uuid)
+
+        self.assertFalse(called['fault_added'])
 
     def test_create_instance_with_img_ref_associates_config_drive(self):
         """Make sure create associates a config drive."""
@@ -473,6 +516,42 @@ class ComputeTestCase(BaseTestCase):
 
         self.compute.terminate_instance(self.context, inst_ref['uuid'])
 
+    def test_set_admin_password_driver_error(self):
+        """Ensure error is raised admin password set"""
+
+        def fake_sleep(_time):
+            pass
+
+        self.stubs.Set(time, 'sleep', fake_sleep)
+
+        def fake_driver_set_pass(self2, _instance, _pwd):
+            raise exception.NotAuthorized(_('Internal error'))
+
+        self.stubs.Set(nova.virt.fake.FakeConnection, 'set_admin_password',
+                       fake_driver_set_pass)
+
+        instance = self._create_fake_instance()
+        instance_uuid = instance['uuid']
+        self.compute.run_instance(self.context, instance_uuid)
+        db.instance_update(self.context, instance_uuid,
+                           {'task_state': task_states.UPDATING_PASSWORD})
+
+        inst_ref = db.instance_get_by_uuid(self.context, instance_uuid)
+        self.assertEqual(inst_ref['vm_state'], vm_states.ACTIVE)
+        self.assertEqual(inst_ref['task_state'], task_states.UPDATING_PASSWORD)
+
+        #error raised from the driver should not reveal internal information
+        #so a new error is raised
+        self.assertRaises(exception.Error,
+                          self.compute.set_admin_password,
+                          self.context, instance_uuid)
+
+        inst_ref = db.instance_get_by_uuid(self.context, instance_uuid)
+        self.assertEqual(inst_ref['vm_state'], vm_states.ERROR)
+        self.assertEqual(inst_ref['task_state'], None)
+
+        self.compute.terminate_instance(self.context, inst_ref['uuid'])
+
     def test_inject_file(self):
         """Ensure we can write a file to an instance"""
         called = {'inject': False}
@@ -587,9 +666,20 @@ class ComputeTestCase(BaseTestCase):
         instance = self._create_fake_instance()
         self.compute.run_instance(self.context, instance['uuid'])
 
-        console = self.compute.get_console_output(self.context,
+        output = self.compute.get_console_output(self.context,
                                                   instance['uuid'])
-        self.assert_(console)
+        self.assertEqual(output, 'FAKE CONSOLE OUTPUT\nANOTHER\nLAST LINE')
+        self.compute.terminate_instance(self.context, instance['uuid'])
+
+    def test_console_output_tail(self):
+        """Make sure we can get console output from instance"""
+        instance = self._create_fake_instance()
+        self.compute.run_instance(self.context, instance['uuid'])
+
+        output = self.compute.get_console_output(self.context,
+                                                instance['uuid'],
+                                                tail_length=2)
+        self.assertEqual(output, 'ANOTHER\nLAST LINE')
         self.compute.terminate_instance(self.context, instance['uuid'])
 
     def test_ajax_console(self):
@@ -883,6 +973,48 @@ class ComputeTestCase(BaseTestCase):
         self.assertEquals(payload['image_ref_url'], image_ref_url)
         self.compute.terminate_instance(context, instance_uuid)
 
+    def test_prep_resize_instance_migration_error(self):
+        """Ensure prep_resize raise a migration error"""
+        self.flags(host="foo", allow_resize_to_same_host=False)
+
+        instance = self._create_fake_instance()
+        instance_uuid = instance['uuid']
+        context = self.context.elevated()
+
+        self.compute.run_instance(self.context, instance_uuid)
+        db.instance_update(self.context, instance_uuid, {'host': 'foo'})
+
+        self.assertRaises(exception.MigrationError, self.compute.prep_resize,
+                          context, instance_uuid, 1)
+        self.compute.terminate_instance(context, instance_uuid)
+
+    def test_resize_instance_driver_error(self):
+        """Ensure instance status set to Error on resize error"""
+
+        def throw_up(*args, **kwargs):
+            raise Exception()
+
+        self.stubs.Set(self.compute.driver, 'migrate_disk_and_power_off',
+                       throw_up)
+
+        instance = self._create_fake_instance()
+        instance_uuid = instance['uuid']
+        context = self.context.elevated()
+
+        self.compute.run_instance(self.context, instance_uuid)
+        db.instance_update(self.context, instance_uuid, {'host': 'foo'})
+        self.compute.prep_resize(context, instance_uuid, 1)
+        migration_ref = db.migration_get_by_instance_and_status(context,
+                instance_uuid, 'pre-migrating')
+
+        #verify
+        self.assertRaises(Exception, self.compute.resize_instance, context,
+                          instance_uuid, migration_ref['id'])
+        instance = db.instance_get_by_uuid(context, instance_uuid)
+        self.assertEqual(instance['vm_state'], vm_states.ERROR)
+
+        self.compute.terminate_instance(context, instance_uuid)
+
     def test_resize_instance(self):
         """Ensure instance can be migrated/resized"""
         instance = self._create_fake_instance()
@@ -964,7 +1096,7 @@ class ComputeTestCase(BaseTestCase):
         instance = self._create_fake_instance()
         self.compute.run_instance(self.context, instance['uuid'])
         instance = db.instance_get_by_uuid(self.context, instance['uuid'])
-        self.assertRaises(exception.Error, self.compute.prep_resize,
+        self.assertRaises(exception.MigrationError, self.compute.prep_resize,
                 self.context, instance['uuid'], 1)
         self.compute.terminate_instance(self.context, instance['uuid'])
 
@@ -1178,24 +1310,6 @@ class ComputeTestCase(BaseTestCase):
         self.assertEqual(power_state.NOSTATE, instances[0]['power_state'])
 
     def test_add_instance_fault(self):
-        instance_uuid = str(utils.gen_uuid())
-
-        def fake_db_fault_create(ctxt, values):
-            expected = {
-                'code': 404,
-                'message': 'HTTPNotFound',
-                'details': 'Error Details',
-                'instance_uuid': instance_uuid,
-            }
-            self.assertEquals(expected, values)
-
-        self.stubs.Set(nova.db, 'instance_fault_create', fake_db_fault_create)
-
-        ctxt = context.get_admin_context()
-        self.compute.add_instance_fault(ctxt, instance_uuid, 404,
-                                        'HTTPNotFound', 'Error Details')
-
-    def test_add_instance_fault_error(self):
         instance_uuid = str(utils.gen_uuid())
 
         def fake_db_fault_create(ctxt, values):
@@ -1587,7 +1701,7 @@ class ComputeAPITestCase(BaseTestCase):
         self.compute_api.rebuild(self.context, instance, image_ref, password)
 
         instance = db.instance_get_by_uuid(self.context, instance_uuid)
-        self.assertEqual(instance['task_state'], task_states.REBUILDING)
+        self.assertEqual(instance['vm_state'], vm_states.REBUILDING)
 
         db.instance_destroy(self.context, instance_uuid)
 
@@ -1681,12 +1795,135 @@ class ComputeAPITestCase(BaseTestCase):
         self.compute.terminate_instance(self.context, instance_uuid)
 
     def test_snapshot(self):
-        """Can't backup an instance which is already being backed up."""
+        """Ensure a snapshot of an instance can be created"""
         instance = self._create_fake_instance()
         image = self.compute_api.snapshot(self.context, instance, 'snap1',
                                         {'extra_param': 'value1'})
 
         self.assertEqual(image['name'], 'snap1')
+        properties = image['properties']
+        self.assertTrue('backup_type' not in properties)
+        self.assertEqual(properties['image_type'], 'snapshot')
+        self.assertEqual(properties['instance_uuid'], instance['uuid'])
+        self.assertEqual(properties['extra_param'], 'value1')
+
+        db.instance_destroy(self.context, instance['id'])
+
+    def test_snapshot_minram_mindisk_VHD(self):
+        """Ensure a snapshots min_ram and min_disk are correct.
+
+        A snapshot of a non-shrinkable VHD should have min_ram
+        and min_disk set to that of the original instances flavor.
+        """
+
+        def fake_show(*args):
+            img = copy(self.fake_image)
+            img['disk_format'] = 'vhd'
+            return img
+        self.stubs.Set(fake_image._FakeImageService, 'show', fake_show)
+
+        instance = self._create_fake_instance()
+        inst_params = {'local_gb': 2, 'memory_mb': 256}
+        instance['instance_type'].update(inst_params)
+
+        image = self.compute_api.snapshot(self.context, instance, 'snap1',
+                                        {'extra_param': 'value1'})
+
+        self.assertEqual(image['name'], 'snap1')
+        self.assertEqual(image['min_ram'], 256)
+        self.assertEqual(image['min_disk'], 2)
+        properties = image['properties']
+        self.assertTrue('backup_type' not in properties)
+        self.assertEqual(properties['image_type'], 'snapshot')
+        self.assertEqual(properties['instance_uuid'], instance['uuid'])
+        self.assertEqual(properties['extra_param'], 'value1')
+
+        db.instance_destroy(self.context, instance['id'])
+
+    def test_snapshot_minram_mindisk(self):
+        """Ensure a snapshots min_ram and min_disk are correct.
+
+        A snapshot of an instance should have min_ram and min_disk
+        set to that of the instances original image unless that
+        image had a disk format of vhd.
+        """
+
+        def fake_show(*args):
+            img = copy(self.fake_image)
+            img['disk_format'] = 'raw'
+            img['min_ram'] = 512
+            img['min_disk'] = 1
+            return img
+        self.stubs.Set(fake_image._FakeImageService, 'show', fake_show)
+
+        instance = self._create_fake_instance()
+
+        image = self.compute_api.snapshot(self.context, instance, 'snap1',
+                                        {'extra_param': 'value1'})
+
+        self.assertEqual(image['name'], 'snap1')
+        self.assertEqual(image['min_ram'], 512)
+        self.assertEqual(image['min_disk'], 1)
+        properties = image['properties']
+        self.assertTrue('backup_type' not in properties)
+        self.assertEqual(properties['image_type'], 'snapshot')
+        self.assertEqual(properties['instance_uuid'], instance['uuid'])
+        self.assertEqual(properties['extra_param'], 'value1')
+
+        db.instance_destroy(self.context, instance['id'])
+
+    def test_snapshot_minram_mindisk_img_missing_minram(self):
+        """Ensure a snapshots min_ram and min_disk are correct.
+
+        Do not show an attribute that the orig img did not have.
+        """
+
+        def fake_show(*args):
+            img = copy(self.fake_image)
+            img['disk_format'] = 'raw'
+            img['min_disk'] = 1
+            return img
+        self.stubs.Set(fake_image._FakeImageService, 'show', fake_show)
+
+        instance = self._create_fake_instance()
+
+        image = self.compute_api.snapshot(self.context, instance, 'snap1',
+                                        {'extra_param': 'value1'})
+
+        self.assertEqual(image['name'], 'snap1')
+        self.assertFalse('min_ram' in image)
+        self.assertEqual(image['min_disk'], 1)
+        properties = image['properties']
+        self.assertTrue('backup_type' not in properties)
+        self.assertEqual(properties['image_type'], 'snapshot')
+        self.assertEqual(properties['instance_uuid'], instance['uuid'])
+        self.assertEqual(properties['extra_param'], 'value1')
+
+        db.instance_destroy(self.context, instance['id'])
+
+    def test_snapshot_minram_mindisk_no_image(self):
+        """Ensure a snapshots min_ram and min_disk are correct.
+
+        A snapshots min_ram and min_disk should be set to default if
+        an instances original image cannot be found.
+        """
+
+        def fake_show(*args):
+            raise webob.exc.HTTPNotFound()
+
+        self.stubs.Set(fake_image._FakeImageService, 'show', fake_show)
+
+        instance = self._create_fake_instance()
+
+        image = self.compute_api.snapshot(self.context, instance, 'snap1',
+                                        {'extra_param': 'value1'})
+
+        self.assertEqual(image['name'], 'snap1')
+
+        # min_ram and min_disk are not returned when set to default
+        self.assertFalse('min_ram' in image)
+        self.assertFalse('min_disk' in image)
+
         properties = image['properties']
         self.assertTrue('backup_type' not in properties)
         self.assertEqual(properties['image_type'], 'snapshot')
@@ -1867,7 +2104,8 @@ class ComputeAPITestCase(BaseTestCase):
 
         nw_info = fake_network.fake_get_instance_nw_info(self.stubs, 1)
 
-        def fake_get_nw_info(self, ctxt, instance):
+        def fake_get_nw_info(cls, ctxt, instance):
+            self.assertTrue(ctxt.is_admin)
             return nw_info
 
         self.stubs.Set(nova.network.API, 'associate_floating_ip',
@@ -2259,6 +2497,32 @@ class ComputeAPITestCase(BaseTestCase):
         self.compute_api.delete_instance_metadata(_context, instance, 'key2')
         metadata = self.compute_api.get_instance_metadata(_context, instance)
         self.assertEqual(metadata, {'key3': 'value3'})
+
+        db.instance_destroy(_context, instance['uuid'])
+
+    def test_get_instance_faults(self):
+        """Get an instances latest fault"""
+        instance = self._create_fake_instance()
+
+        fault_fixture = {
+                'code': 404,
+                'instance_uuid': instance['uuid'],
+                'message': "HTTPNotFound",
+                'details': "Stock details for test",
+                'created_at': datetime.datetime(2010, 10, 10, 12, 0, 0),
+            }
+
+        def return_fault(_ctxt, instance_uuids):
+            return dict.fromkeys(instance_uuids, [fault_fixture])
+
+        self.stubs.Set(nova.db,
+                       'instance_fault_get_by_instance_uuids',
+                       return_fault)
+
+        _context = context.get_admin_context()
+        output = self.compute_api.get_instance_faults(_context, [instance])
+        expected = {instance['uuid']: [fault_fixture]}
+        self.assertEqual(output, expected)
 
         db.instance_destroy(_context, instance['uuid'])
 

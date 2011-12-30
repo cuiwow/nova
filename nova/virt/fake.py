@@ -25,11 +25,11 @@ semantics of real hypervisor connections.
 
 """
 
+from nova.compute import power_state
 from nova import db
 from nova import exception
 from nova import log as logging
 from nova import utils
-from nova.compute import power_state
 from nova.virt import driver
 
 
@@ -115,7 +115,8 @@ class FakeConnection(driver.ComputeDriver):
     def reboot(self, instance, network_info, reboot_type):
         pass
 
-    def get_host_ip_addr(self):
+    @staticmethod
+    def get_host_ip_addr():
         return '192.168.0.1'
 
     def resize(self, instance, flavor):
@@ -217,7 +218,7 @@ class FakeConnection(driver.ComputeDriver):
         return [0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L]
 
     def get_console_output(self, instance):
-        return 'FAKE CONSOLE\xffOUTPUT'
+        return 'FAKE CONSOLE OUTPUT\nANOTHER\nLAST LINE'
 
     def get_ajax_console(self, instance):
         return {'token': 'FAKETOKEN',

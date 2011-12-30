@@ -50,8 +50,6 @@ flags.DEFINE_string('dhcpbridge', _bin_file('nova-dhcpbridge'),
                         'location of nova-dhcpbridge')
 flags.DEFINE_string('routing_source_ip', '$my_ip',
                     'Public IP of network host')
-flags.DEFINE_string('input_chain', 'INPUT',
-                    'chain to add nova_input to')
 flags.DEFINE_integer('dhcp_lease_time', 120,
                      'Lifetime of a DHCP lease')
 flags.DEFINE_string('dns_server', None,
@@ -371,6 +369,18 @@ class IptablesManager(object):
         return new_filter
 
 
+# NOTE(jkoelker) This is just a nice little stub point since mocking
+#                builtins with mox is a nightmare
+def write_to_file(file, data, mode='w'):
+    with open(file, mode) as f:
+        f.write(data)
+
+
+def ensure_path(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+
 def metadata_forward():
     """Create forwarding rule for metadata."""
     iptables_manager.ipv4['nat'].add_rule('PREROUTING',
@@ -606,15 +616,13 @@ def release_dhcp(dev, address, mac_address):
 
 def update_dhcp(context, dev, network_ref):
     conffile = _dhcp_file(dev, 'conf')
-    with open(conffile, 'w') as f:
-        f.write(get_dhcp_hosts(context, network_ref))
+    write_to_file(conffile, get_dhcp_hosts(context, network_ref))
     restart_dhcp(context, dev, network_ref)
 
 
 def update_dhcp_hostfile_with_text(dev, hosts_text):
     conffile = _dhcp_file(dev, 'conf')
-    with open(conffile, 'w') as f:
-        f.write(hosts_text)
+    write_to_file(conffile, hosts_text)
 
 
 def kill_dhcp(dev):
@@ -637,8 +645,7 @@ def restart_dhcp(context, dev, network_ref):
 
     if FLAGS.use_single_default_gateway:
         optsfile = _dhcp_file(dev, 'opts')
-        with open(optsfile, 'w') as f:
-            f.write(get_dhcp_opts(context, network_ref))
+        write_to_file(optsfile, get_dhcp_opts(context, network_ref))
         os.chmod(optsfile, 0644)
 
     # Make sure dnsmasq can actually read it (it setuid()s to "nobody")
@@ -690,8 +697,7 @@ def restart_dhcp(context, dev, network_ref):
 @utils.synchronized('radvd_start')
 def update_ra(context, dev, network_ref):
     conffile = _ra_file(dev, 'conf')
-    with open(conffile, 'w') as f:
-        conf_str = """
+    conf_str = """
 interface %s
 {
    AdvSendAdvert on;
@@ -704,7 +710,7 @@ interface %s
    };
 };
 """ % (dev, network_ref['cidr_v6'])
-        f.write(conf_str)
+    write_to_file(conffile, conf_str)
 
     # Make sure radvd can actually read it (it setuid()s to "nobody")
     os.chmod(conffile, 0644)
@@ -792,8 +798,7 @@ def _device_exists(device):
 
 def _dhcp_file(dev, kind):
     """Return path to a pid, leases or conf file for a bridge/device."""
-    if not os.path.exists(FLAGS.networks_path):
-        os.makedirs(FLAGS.networks_path)
+    ensure_path(FLAGS.networks_path)
     return os.path.abspath('%s/nova-%s.%s' % (FLAGS.networks_path,
                                               dev,
                                               kind))
@@ -801,9 +806,7 @@ def _dhcp_file(dev, kind):
 
 def _ra_file(dev, kind):
     """Return path to a pid or conf file for a bridge/device."""
-
-    if not os.path.exists(FLAGS.networks_path):
-        os.makedirs(FLAGS.networks_path)
+    ensure_path(FLAGS.networks_path)
     return os.path.abspath('%s/nova-ra-%s.%s' % (FLAGS.networks_path,
                                               dev,
                                               kind))

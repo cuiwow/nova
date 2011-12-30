@@ -32,6 +32,7 @@ from nova import log as logging
 from nova.compute import vm_states
 from nova.db.sqlalchemy import models
 from nova.db.sqlalchemy.session import get_session
+from sqlalchemy import and_
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
@@ -375,6 +376,14 @@ def compute_node_get_all(context, session=None):
     return model_query(context, models.ComputeNode, session=session).\
                     options(joinedload('service')).\
                     all()
+
+
+@require_admin_context
+def compute_node_get_for_service(context, service_id):
+    return model_query(context, models.ComputeNode).\
+                    options(joinedload('service')).\
+                    filter_by(service_id=service_id).\
+                    first()
 
 
 @require_admin_context
@@ -766,16 +775,25 @@ def fixed_ip_disassociate(context, address):
 @require_admin_context
 def fixed_ip_disassociate_all_by_timeout(context, host, time):
     session = get_session()
-    inner_q = model_query(context, models.Network.id, session=session,
-                          read_deleted="yes").\
-                      filter_by(host=host).\
-                      subquery()
+    # NOTE(vish): only update fixed ips that "belong" to this
+    #             host; i.e. the network host or the instance
+    #             host matches. Two queries necessary because
+    #             join with update doesn't work.
+    host_filter = or_(and_(models.Instance.host == host,
+                           models.Network.multi_host == True),
+                      models.Network.host == host)
+    fixed_ips = model_query(context, models.FixedIp.id, session=session,
+                       read_deleted="yes").\
+                      filter(models.FixedIp.updated_at < time).\
+                      filter(models.FixedIp.instance_id != None).\
+                      filter(models.FixedIp.allocated == False).\
+                      join(models.FixedIp.instance).\
+                      join(models.FixedIp.network).\
+                      filter(host_filter).\
+                      all()
     result = model_query(context, models.FixedIp, session=session,
                          read_deleted="yes").\
-                     filter(models.FixedIp.network_id.in_(inner_q)).\
-                     filter(models.FixedIp.updated_at < time).\
-                     filter(models.FixedIp.instance_id != None).\
-                     filter_by(allocated=False).\
+                     filter(models.FixedIp.id.in_(fixed_ips)).\
                      update({'instance_id': None,
                              'leased': False,
                              'updated_at': utils.utcnow()},
@@ -818,7 +836,6 @@ def fixed_ip_get_all_by_instance_host(context, host=None):
     result = model_query(context, models.FixedIp, read_deleted="yes").\
                      options(joinedload('floating_ips')).\
                      join(models.FixedIp.instance).\
-                     filter_by(state=1).\
                      filter_by(host=host).\
                      all()
 
@@ -939,7 +956,7 @@ def virtual_interface_update(context, vif_id, values):
 def _virtual_interface_query(context, session=None):
     return model_query(context, models.VirtualInterface, session=session,
                        read_deleted="yes").\
-                      options(joinedload('fixed_ips'))
+                       options(joinedload_all('fixed_ips.floating_ips'))
 
 
 @require_context
@@ -4021,16 +4038,27 @@ def sm_volume_get_all(context):
 
 
 def instance_fault_create(context, values):
-    """Create a new Instance Fault."""
+    """Create a new InstanceFault."""
     fault_ref = models.InstanceFault()
     fault_ref.update(values)
     fault_ref.save()
-    return fault_ref
+    return dict(fault_ref.iteritems())
 
 
-def instance_fault_get_by_instance(context, instance_uuid):
-    """Get first instance fault with the given instance uuid."""
-    return model_query(context, models.InstanceFault, read_deleted='no').\
-                filter_by(instance_uuid=instance_uuid).\
-                order_by(desc("created_at")).\
-                first()
+def instance_fault_get_by_instance_uuids(context, instance_uuids):
+    """Get all instance faults for the provided instance_uuids."""
+    rows = model_query(context, models.InstanceFault, read_deleted='no').\
+                       filter(models.InstanceFault.instance_uuid.in_(
+                           instance_uuids)).\
+                       order_by(desc("created_at")).\
+                       all()
+
+    output = {}
+    for instance_uuid in instance_uuids:
+        output[instance_uuid] = []
+
+    for row in rows:
+        data = dict(row.iteritems())
+        output[row['instance_uuid']].append(data)
+
+    return output
