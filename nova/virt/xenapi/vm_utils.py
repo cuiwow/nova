@@ -300,6 +300,15 @@ class VMHelper(HelperBase):
         session.call_xenapi("VDI.set_name_label", vdi_ref, name_label)
 
     @classmethod
+    def copy_vdi(cls, session, sr_ref, vdi_to_copy_ref):
+        """Copy a VDI and return the new VDIs reference."""
+        vdi_ref = session.get_xenapi().VDI.copy(vdi_to_copy_ref, sr_ref)
+        LOG.debug(_('Copied VDI %(vdi_ref)s from '
+                'VDI %(vdi_to_copy_ref)s on %(sr_ref)s.')
+                % locals())
+        return vdi_ref
+
+    @classmethod
     def get_vdi_for_vm_safely(cls, session, vm_ref):
         """Retrieves the primary VDI for a VM"""
         vbd_refs = session.call_xenapi("VM.get_VBDs", vm_ref)
@@ -352,6 +361,17 @@ class VMHelper(HelperBase):
         sr_rec = session.call_xenapi("SR.get_record", sr_ref)
         sr_uuid = sr_rec["uuid"]
         return os.path.join(FLAGS.xenapi_sr_base_path, sr_uuid)
+
+    @classmethod
+    def find_cached_image(cls, session, image_id):
+        """Returns the vdi-ref of the cached image."""
+        vdi_refs = session.get_xenapi().VDI.get_all()
+        for vdi_ref in vdi_refs:
+            vdi_rec = session.get_xenapi().VDI.get_record(vdi_ref)
+            if ('image-id' in vdi_rec['other_config'] and
+                vdi_rec['other_config']['image-id'] == image_id):
+                    return vdi_ref
+        return None
 
     @classmethod
     def upload_image(cls, context, session, instance, vdi_uuids, image_id):
@@ -502,6 +522,92 @@ class VMHelper(HelperBase):
 
         vdi_ref = cls.create_vdi(session, sr_ref, 'blank HD', vdi_size, False)
         return vdi_ref
+
+    @classmethod
+    def create_image(cls, context, session, instance, image, user_id,
+                     project_id, image_type, cow=False):
+        """Creates VDI from the image stored in the local cache. If the image
+        is not present in the cache, it streams it from glance.
+
+        Returns: A list of dictionaries that describe VDIs
+        """
+        sr_ref = safe_find_sr(session)
+        sr_type = session.get_xenapi().SR.get_record(sr_ref)["type"]
+        vdi_return_list = []
+        new_vdi_uuid = None
+
+        vdi_ref = cls.find_cached_image(session, image)
+        if vdi_ref is None:
+            vdis = cls.fetch_image(context, session, instance, image, user_id,
+                                   project_id, image_type)
+            vdi_ref = session.get_xenapi().VDI.get_by_uuid(vdis[0]['vdi_uuid'])
+            session.get_xenapi().VDI.add_to_other_config(
+                vdi_ref, "image-id", str(image))
+
+            for vdi in vdis:
+                if vdi["vdi_type"] == "swap":
+                    session.get_xenapi().VDI.add_to_other_config(
+                        vdi_ref, "swap-disk", str(vdi['vdi_uuid']))
+
+        if cow and sr_type == 'ext':
+            LOG.debug(_('Asking xapi to snapshot the parent vhd'))
+
+            new_vdi_uuid = str(uuid.uuid4())
+            vdi_uuid = session.get_xenapi().VDI.get_uuid(vdi_ref)
+            params = {'uuid_of_vhd': vdi_uuid,
+                      'new_vhd_uuid': new_vdi_uuid,
+                      'sr_path': cls.get_sr_path(session)}
+
+            kwargs = {'params': pickle.dumps(params)}
+            task = session.async_call_plugin('glance', 'snapshot_vhd', kwargs)
+            result = session.wait_for_task(task, instance.id)
+            vdis = json.loads(result)
+            for vdi in vdis:
+                LOG.debug(_("xapi 'snapshot_vhd' returned VDI of "
+                    "type '%(vdi_type)s' with UUID '%(vdi_uuid)s'" % vdi))
+
+            # Scan the SR so that the VDI gets created.
+            cls.scan_default_sr(session)
+            new_vdi_uuid = vdis[0]['vdi_uuid']
+            new_vdi_ref = session.get_xenapi().VDI.get_by_uuid(new_vdi_uuid)
+            if new_vdi_ref is None:
+                raise exception.Error(_('Copy on write disk could not be '
+                                        'created'))
+        else:
+            new_vdi_ref = cls.copy_vdi(session, sr_ref, vdi_ref)
+            session.get_xenapi().VDI.remove_from_other_config(
+                new_vdi_ref, "image-id")
+            new_vdi_uuid = session.get_xenapi().VDI.get_uuid(new_vdi_ref)
+
+        # Set the name-label for the image we just created
+        session.get_xenapi().VDI.set_name_label(new_vdi_ref, instance.name)
+
+        if image_type == ImageType.DISK_VHD:
+            new_vdi_type = "os"
+        else:
+            new_vdi_type = ImageType.to_string(image_type)
+
+        vdi_return_list.append(dict(
+            vdi_type=new_vdi_type,
+            vdi_uuid=new_vdi_uuid,
+            file=None))
+
+        # Create a swap disk if the glance image had one associated with it.
+        vdi_rec = session.get_xenapi().VDI.get_record(vdi_ref)
+        if 'swap-disk' in vdi_rec['other_config']:
+            swap_disk_uuid = vdi_rec['other_config']['swap-disk']
+            swap_vdi_ref = session.get_xenapi().VDI.get_by_uuid(swap_disk_uuid)
+            new_swap_vdi_ref = cls.copy_vdi(session, sr_ref, swap_vdi_ref)
+            new_swap_vdi_uuid = session.get_xenapi().VDI.get_uuid(
+                new_swap_vdi_ref)
+            session.get_xenapi().VDI.set_name_label(new_swap_vdi_ref,
+                instance.name + "-swap")
+
+            vdi_return_list.append(dict(vdi_type="swap",
+                vdi_uuid=new_swap_vdi_uuid,
+                file=None))
+
+        return vdi_return_list
 
     @classmethod
     def fetch_image(cls, context, session, instance, image, user_id,

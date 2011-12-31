@@ -435,6 +435,28 @@ def _finish_subprocess(proc, cmdline):
     return out, err
 
 
+def snapshot_vhd(session, args):
+    """Uses vhd-util to snapshot a vhd and returns the new child vhd that
+    gets created.
+    """
+    vdi_return_list = []
+    params = pickle.loads(exists(args, 'params'))
+    uuid_of_vhd = params["uuid_of_vhd"]
+    new_vhd_uuid = params["new_vhd_uuid"]
+    sr_path = params["sr_path"]
+
+    child_path = os.path.join(sr_path, "%s.vhd" % new_vhd_uuid)
+    vhd_to_snapshot = os.path.join(sr_path, "%s.vhd" % uuid_of_vhd)
+
+    snapshot_cmd = ("vhd-util snapshot -n %(child_path)s "
+                    "-p %(vhd_to_snapshot)s" % locals())
+    snapshot_proc = _make_subprocess(snapshot_cmd, stderr=True)
+    _finish_subprocess(snapshot_proc, snapshot_cmd)
+
+    vdi_return_list.append(dict(vdi_type="os", vdi_uuid=new_vhd_uuid))
+    return json.dumps(vdi_return_list)
+
+
 def download_vhd(session, args):
     """Download an image from Glance, unbundle it, and then deposit the VHDs
     into the storage repository
@@ -510,5 +532,6 @@ def remove_kernel_ramdisk(session, args):
 if __name__ == '__main__':
     XenAPIPlugin.dispatch({'upload_vhd': upload_vhd,
                            'download_vhd': download_vhd,
+                           'snapshot_vhd': snapshot_vhd,
                            'copy_kernel_vdi': copy_kernel_vdi,
                            'remove_kernel_ramdisk': remove_kernel_ramdisk})
