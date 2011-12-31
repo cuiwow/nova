@@ -42,6 +42,7 @@ from nova.virt import driver
 from nova.virt.xenapi import volume_utils
 from nova.virt.xenapi import network_utils
 from nova.virt.xenapi import vm_utils
+from nova.virt.xenapi.vm_utils import ImageType
 
 VolumeHelper = volume_utils.VolumeHelper
 NetworkHelper = network_utils.NetworkHelper
