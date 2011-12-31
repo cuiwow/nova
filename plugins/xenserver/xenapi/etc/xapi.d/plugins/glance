@@ -54,22 +54,28 @@ class RetryException(Exception):
 def _copy_kernel_vdi(dest, copy_args):
     vdi_uuid = copy_args['vdi_uuid']
     vdi_size = copy_args['vdi_size']
-    logging.debug("copying kernel/ramdisk file from %s to /boot/guest/%s",
-                  dest, vdi_uuid)
+    cached_image = copy_args['cached-image']
+    logging.debug("copying kernel/ramdisk file from %s to /boot/guest/%s "
+                  "and /boot/guest/%s", dest, cached_image, vdi_uuid)
     filename = KERNEL_DIR + '/' + vdi_uuid
+    cached_image = KERNEL_DIR + '/' + cached_image
     #make sure KERNEL_DIR exists, otherwise create it
     if not os.path.isdir(KERNEL_DIR):
         logging.debug("Creating directory %s", KERNEL_DIR)
         os.makedirs(KERNEL_DIR)
-    #read data from /dev/ and write into a file on /boot/guest
+    #read data from /dev/ and write into files on /boot/guest
     of = open(filename, 'wb')
+    of2 = open(cached_image, 'wb')
     f = open(dest, 'rb')
     #copy only vdi_size bytes
     data = f.read(vdi_size)
     of.write(data)
+    of2.write(data)
     f.close()
     of.close()
-    logging.debug("Done. Filename: %s", filename)
+    of2.close()
+    logging.debug("Done. Filename: %s, Cached filename: %s",
+                  filename, cached_image)
     return filename
 
 
@@ -435,6 +441,46 @@ def _finish_subprocess(proc, cmdline):
     return out, err
 
 
+def create_kernel_ramdisk(session, args):
+    """Creates a copy of the kernel/ramdisk image if it is present in the
+    cache. If the image is not present in the cache, it does nothing.
+    """
+    cached_image = exists(args, 'cached-image')
+    image_uuid = exists(args, 'new-image-uuid')
+    cached_image_filename = KERNEL_DIR + '/' + cached_image
+    filename = KERNEL_DIR + '/' + image_uuid
+
+    if os.path.isfile(cached_image_filename):
+        shutil.copyfile(cached_image_filename, filename)
+        logging.debug("Done. Filename: %s", filename)
+    else:
+        filename = ""
+        logging.debug("Cached kernel/ramdisk image not found")
+    return filename
+
+
+def snapshot_vhd(session, args):
+    """Uses vhd-util to snapshot a vhd and returns the new child vhd that
+    gets created.
+    """
+    vdi_return_list = []
+    params = pickle.loads(exists(args, 'params'))
+    uuid_of_vhd = params["uuid_of_vhd"]
+    new_vhd_uuid = params["new_vhd_uuid"]
+    sr_path = params["sr_path"]
+
+    child_path = os.path.join(sr_path, "%s.vhd" % new_vhd_uuid)
+    vhd_to_snapshot = os.path.join(sr_path, "%s.vhd" % uuid_of_vhd)
+
+    snapshot_cmd = ("vhd-util snapshot -n %(child_path)s "
+                    "-p %(vhd_to_snapshot)s" % locals())
+    snapshot_proc = _make_subprocess(snapshot_cmd, stderr=True)
+    _finish_subprocess(snapshot_proc, snapshot_cmd)
+
+    vdi_return_list.append(dict(vdi_type="os", vdi_uuid=new_vhd_uuid))
+    return json.dumps(vdi_return_list)
+
+
 def download_vhd(session, args):
     """Download an image from Glance, unbundle it, and then deposit the VHDs
     into the storage repository
@@ -487,9 +533,12 @@ def upload_vhd(session, args):
 def copy_kernel_vdi(session, args):
     vdi = exists(args, 'vdi-ref')
     size = exists(args, 'image-size')
+    cached_image = exists(args, 'cached-image')
     #Use the uuid as a filename
     vdi_uuid = session.xenapi.VDI.get_uuid(vdi)
-    copy_args = {'vdi_uuid': vdi_uuid, 'vdi_size': int(size)}
+    copy_args = {'vdi_uuid': vdi_uuid,
+                 'vdi_size': int(size),
+                 'cached-image': cached_image}
     filename = with_vdi_in_dom0(session, vdi, False,
                                 lambda dev:
                                _copy_kernel_vdi('/dev/%s' % dev, copy_args))
@@ -510,5 +559,7 @@ def remove_kernel_ramdisk(session, args):
 if __name__ == '__main__':
     XenAPIPlugin.dispatch({'upload_vhd': upload_vhd,
                            'download_vhd': download_vhd,
+                           'snapshot_vhd': snapshot_vhd,
                            'copy_kernel_vdi': copy_kernel_vdi,
+                           'create_kernel_ramdisk': create_kernel_ramdisk,
                            'remove_kernel_ramdisk': remove_kernel_ramdisk})
