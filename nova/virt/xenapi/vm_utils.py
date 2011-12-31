@@ -554,7 +554,7 @@ class VMHelper(HelperBase):
 
         Returns: A list of dictionaries that describe VDIs
         """
-        sr_ref = safe_find_sr(session)
+        sr_ref = cls.safe_find_sr(session)
         sr_type = session.get_xenapi().SR.get_record(sr_ref)["type"]
         vdi_return_list = []
         new_vdi_uuid = None
