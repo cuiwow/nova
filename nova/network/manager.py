@@ -557,6 +557,21 @@ class NetworkManager(manager.SchedulerDependentManager):
         self.compute_api.trigger_security_group_members_refresh(admin_context,
                                                                     group_ids)
 
+    def get_floating_ip(self, context, id):
+        # NOTE(johngarbutt) This is just a stub function. Managers supporting
+        #                   floating ips MUST override this or use the Mixin
+        return []
+
+    def get_floating_ip_by_address(self, context, address):
+        # NOTE(johngarbutt) This is just a stub function. Managers supporting
+        #                   floating ips MUST override this or use the Mixin
+        return []
+
+    def get_floating_ips_by_project(self, context):
+        # NOTE(johngarbutt) This is just a stub function. Managers supporting
+        #                   floating ips MUST override this or use the Mixin
+        return []
+
     def get_floating_ips_by_fixed_address(self, context, fixed_address):
         # NOTE(jkoelker) This is just a stub function. Managers supporting
         #                floating ips MUST override this or use the Mixin
