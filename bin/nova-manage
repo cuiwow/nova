@@ -1179,7 +1179,7 @@ class VersionCommands(object):
         pass
 
     def list(self):
-        print _("%s (%s)") %\
+        print _("%s (%s)") % \
                 (version.version_string(), version.version_string_with_vcs())
 
     def __call__(self):
@@ -1206,7 +1206,7 @@ class VsaCommands(object):
                     "%(stat)-10s %(host)-15s %(time)s"
 
     def _print_vsa_header(self):
-        print self._format_str_vsa %\
+        print self._format_str_vsa % \
                dict(id=_('ID'),
                     vsa_id=_('vsa_id'),
                     name=_('displayName'),
@@ -1218,7 +1218,7 @@ class VsaCommands(object):
                     time=_('createTime'))
 
     def _print_vsa(self, vsa):
-        print self._format_str_vsa %\
+        print self._format_str_vsa % \
                 dict(id=vsa['id'],
                      vsa_id=vsa['name'],
                      name=vsa['display_name'],
@@ -1231,7 +1231,7 @@ class VsaCommands(object):
 
     def _print_volume_header(self):
         print _('      === Volumes ===')
-        print self._format_str_volume %\
+        print self._format_str_volume % \
                 dict(id=_('ID'),
                      name=_('name'),
                      size=_('size'),
@@ -1240,7 +1240,7 @@ class VsaCommands(object):
                      time=_('createTime'))
 
     def _print_volume(self, vol):
-        print self._format_str_volume %\
+        print self._format_str_volume % \
                 dict(id=vol['id'],
                      name=vol['display_name'] or vol['name'],
                      size=vol['size'],
@@ -1250,7 +1250,7 @@ class VsaCommands(object):
 
     def _print_drive_header(self):
         print _('      === Drives ===')
-        print self._format_str_drive %\
+        print self._format_str_drive % \
                 dict(id=_('ID'),
                     name=_('name'),
                     size=_('size'),
@@ -1266,7 +1266,7 @@ class VsaCommands(object):
         else:
             drive_type_name = ''
 
-        print self._format_str_drive %\
+        print self._format_str_drive % \
                 dict(id=drive['id'],
                     name=drive['display_name'],
                     size=drive['size'],
@@ -1278,7 +1278,7 @@ class VsaCommands(object):
 
     def _print_instance_header(self):
         print _('      === Instances ===')
-        print self._format_str_instance %\
+        print self._format_str_instance % \
                 dict(id=_('ID'),
                     name=_('name'),
                     dname=_('disp_name'),
@@ -1301,7 +1301,7 @@ class VsaCommands(object):
                 floating_addr = fixed['floating_ips'][0]['address']
         floating_addr = floating_addr or fixed_addr
 
-        print self._format_str_instance %\
+        print self._format_str_instance % \
                 dict(id=vc['id'],
                     name=ec2utils.id_to_ec2_id(vc['id']),
                     dname=vc['display_name'],
@@ -1512,7 +1512,7 @@ class VsaDriveTypeCommands(object):
     def _list(self, drives):
         format_str = "%-5s %-30s %-10s %-10s %-10s %-20s %-10s %s"
         if len(drives):
-            print format_str %\
+            print format_str % \
                    (_('ID'),
                     _('name'),
                     _('type'),
@@ -1524,7 +1524,7 @@ class VsaDriveTypeCommands(object):
 
         for name, vol_type in drives.iteritems():
             drive = vol_type.get('extra_specs')
-            print format_str %\
+            print format_str % \
                 (str(vol_type['id']),
                 drive['drive_name'],
                 drive['drive_type'],
@@ -1805,7 +1805,8 @@ class ImageCommands(object):
 
     def _register(self, container_format, disk_format,
                   path, owner, name=None, is_public='T',
-                  architecture='x86_64', kernel_id=None, ramdisk_id=None):
+                  architecture='x86_64', kernel_id=None, ramdisk_id=None,
+                  auth_token=None):
         meta = {'is_public': (is_public == 'T'),
                 'name': name,
                 'container_format': container_format,
@@ -1819,6 +1820,9 @@ class ImageCommands(object):
         if ramdisk_id:
             meta['properties']['ramdisk_id'] = ramdisk_id
         elevated = context.get_admin_context()
+        if auth_token is not None:
+            elevated.strategy = 'keystone'
+            elevated.auth_token = auth_token
         try:
             with open(path) as ifile:
                 image = self.image_service.create(elevated, meta, ifile)
@@ -1838,8 +1842,11 @@ class ImageCommands(object):
             help='Image public or not')
     @args('--arch', dest='architecture', metavar='<arch>',
             help='Architecture')
+    @args('--auth_token', dest="auth_token", metavar='<token>',
+            help='Token to use to authenticate to the Image Service')
     def all_register(self, image, kernel, ramdisk, owner, name=None,
-                 is_public='T', architecture='x86_64'):
+                 is_public='T', architecture='x86_64',
+                 auth_token=None):
         """Uploads an image, kernel, and ramdisk into the image_service"""
         kernel_id = self.kernel_register(kernel, owner, None,
                                    is_public, architecture)
@@ -1847,7 +1854,7 @@ class ImageCommands(object):
                                     is_public, architecture)
         self.image_register(image, owner, name, is_public,
                             architecture, 'ami', 'ami',
-                            kernel_id, ramdisk_id)
+                            kernel_id, ramdisk_id, auth_token)
 
     @args('--path', dest='path', metavar='<path>', help='Image path')
     @args('--owner', dest='owner', metavar='<owner>', help='Image owner')
@@ -1863,13 +1870,16 @@ class ImageCommands(object):
             help='Disk format(default: raw)')
     @args('--kernel', dest='kernel_id', metavar='<kernel>', help='Kernel')
     @args('--ram', dest='ramdisk_id', metavar='<ramdisk>', help='RAM disk')
+    @args('--auth_token', dest="auth_token", metavar='<token>',
+            help='Token to use to authenticate to the Image Service')
     def image_register(self, path, owner, name=None, is_public='T',
                        architecture='x86_64', container_format='bare',
-                       disk_format='raw', kernel_id=None, ramdisk_id=None):
+                       disk_format='raw', kernel_id=None, ramdisk_id=None,
+                       auth_token=None):
         """Uploads an image into the image_service"""
         return self._register(container_format, disk_format, path,
                               owner, name, is_public, architecture,
-                              kernel_id, ramdisk_id)
+                              kernel_id, ramdisk_id, auth_token)
 
     @args('--path', dest='path', metavar='<path>', help='Image path')
     @args('--owner', dest='owner', metavar='<owner>', help='Image owner')
@@ -1878,11 +1888,13 @@ class ImageCommands(object):
             help='Image public or not')
     @args('--arch', dest='architecture', metavar='<arch>',
             help='Architecture')
+    @args('--auth_token', dest="auth_token", metavar='<token>',
+            help='Token to use to authenticate to the Image Service')
     def kernel_register(self, path, owner, name=None, is_public='T',
-               architecture='x86_64'):
+               architecture='x86_64', auth_token=None):
         """Uploads a kernel into the image_service"""
         return self._register('aki', 'aki', path, owner, name,
-                              is_public, architecture)
+                              is_public, architecture, auth_token=auth_token)
 
     @args('--path', dest='path', metavar='<path>', help='Image path')
     @args('--owner', dest='owner', metavar='<owner>', help='Image owner')
@@ -1891,11 +1903,13 @@ class ImageCommands(object):
             help='Image public or not')
     @args('--arch', dest='architecture', metavar='<arch>',
             help='Architecture')
+    @args('--auth_token', dest="auth_token", metavar='<token>',
+            help='Token to use to authenticate to the Image Service')
     def ramdisk_register(self, path, owner, name=None, is_public='T',
-                architecture='x86_64'):
+                architecture='x86_64', auth_token=None):
         """Uploads a ramdisk into the image_service"""
         return self._register('ari', 'ari', path, owner, name,
-                              is_public, architecture)
+                              is_public, architecture, auth_token=auth_token)
 
     def _lookup(self, old_image_id):
         elevated = context.get_admin_context()
@@ -2284,7 +2298,7 @@ def main():
 
     script_name = argv.pop(0)
     if len(argv) < 1:
-        print _("\nOpenStack Nova version: %s (%s)\n") %\
+        print _("\nOpenStack Nova version: %s (%s)\n") % \
                 (version.version_string(), version.version_string_with_vcs())
         print script_name + " category action [<args>]"
         print _("Available categories:")
