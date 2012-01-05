@@ -1849,9 +1849,9 @@ class ImageCommands(object):
                  auth_token=None):
         """Uploads an image, kernel, and ramdisk into the image_service"""
         kernel_id = self.kernel_register(kernel, owner, None,
-                                   is_public, architecture)
+                                   is_public, architecture, auth_token)
         ramdisk_id = self.ramdisk_register(ramdisk, owner, None,
-                                    is_public, architecture)
+                                    is_public, architecture, auth_token)
         self.image_register(image, owner, name, is_public,
                             architecture, 'ami', 'ami',
                             kernel_id, ramdisk_id, auth_token)
