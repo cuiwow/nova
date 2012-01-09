@@ -46,7 +46,7 @@ flags.DEFINE_bool('use_melange_mac_generation', False,
                   "Use Melange for assignment of MAC addresses")
 
 
-flags.DEFINE_string('quantum_use_dhcp', 'False',
+flags.DEFINE_bool('quantum_use_dhcp', False,
                     'Whether or not to enable DHCP for networks')
 
 
@@ -339,7 +339,7 @@ class QuantumManager(manager.FlatManager):
             if not port:  # No dhcp server has been started
                 mac_address = self.generate_mac_address()
                 dev = self.driver.plug(network_ref, mac_address,
-                    gateway=(network_ref['gateway'] != None))
+                    gateway=(network_ref['gateway'] is not None))
                 self.driver.initialize_gateway_device(dev, network_ref)
                 LOG.debug("Intializing DHCP for network: %s" %
                     network_ref)
@@ -456,7 +456,7 @@ class QuantumManager(manager.FlatManager):
                     info['ip6s'] = [ip_dict(ip, v6_subnet) for ip in v6_ips]
 
                 if v6_subnet['gateway']:
-                    info['gateway6'] = v6_subnet['gateway']
+                    info['gateway_v6'] = v6_subnet['gateway']
 
             dns_dict = {}
             for s in [v4_subnet, v6_subnet]:

@@ -821,7 +821,7 @@ class ConfigOpts(object):
         :return: False if the opt was already register, True otherwise
         :raises: DuplicateOptError, ArgsAlreadyParsedError
         """
-        if self._args != None:
+        if self._args is not None:
             raise ArgsAlreadyParsedError("cannot register CLI option")
 
         if not self.register_opt(opt, group):
@@ -962,9 +962,9 @@ class ConfigOpts(object):
         :param value: the string value, or list of string values
         :returns: the substituted string(s)
         """
-        if type(value) is list:
+        if isinstance(value, list):
             return [self._substitute(i) for i in value]
-        elif type(value) is str:
+        elif isinstance(value, str):
             tmpl = string.Template(value)
             return tmpl.safe_substitute(self.StrSubWrapper(self))
         else:

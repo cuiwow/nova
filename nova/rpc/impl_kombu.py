@@ -18,11 +18,11 @@ import kombu
 import kombu.entity
 import kombu.messaging
 import kombu.connection
+import inspect
 import itertools
 import sys
 import time
 import traceback
-import types
 import uuid
 
 import eventlet
@@ -449,7 +449,6 @@ class Connection(object):
     def publisher_send(self, cls, topic, msg, **kwargs):
         """Send to a publisher based on the publisher class"""
         while True:
-            publisher = None
             try:
                 publisher = cls(self.channel, topic, **kwargs)
                 publisher.send(msg)
@@ -458,8 +457,6 @@ class Connection(object):
                 LOG.exception(_('Failed to publish message %s' % str(e)))
                 try:
                     self.reconnect()
-                    if publisher:
-                        publisher.reconnect(self.channel)
                 except self.connection.connection_errors, e:
                     pass
 
@@ -651,7 +648,7 @@ class ProxyCallback(object):
         try:
             rval = node_func(context=ctxt, **node_args)
             # Check if the result was a generator
-            if isinstance(rval, types.GeneratorType):
+            if inspect.isgenerator(rval):
                 for x in rval:
                     ctxt.reply(x, None)
             else:

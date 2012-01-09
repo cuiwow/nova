@@ -847,7 +847,7 @@ class LibvirtConnection(driver.ComputeDriver):
     def _create_swap(target, swap_mb):
         """Create a swap file of specified size"""
         libvirt_utils.create_image('raw', target, '%dM' % swap_mb)
-        libvirt_utils.mkfs(target, 'swap')
+        libvirt_utils.mkfs('swap', target)
 
     def _create_image(self, context, inst, libvirt_xml, suffix='',
                       disk_images=None, network_info=None,
@@ -1011,7 +1011,7 @@ class LibvirtConnection(driver.ComputeDriver):
             if FLAGS.use_ipv6:
                 address_v6 = mapping['ip6s'][0]['ip']
                 netmask_v6 = mapping['ip6s'][0]['netmask']
-                gateway_v6 = mapping['gateway6']
+                gateway_v6 = mapping['gateway_v6']
             net_info = {'name': 'eth%d' % ifc_num,
                    'address': address,
                    'netmask': netmask,
@@ -1019,7 +1019,7 @@ class LibvirtConnection(driver.ComputeDriver):
                    'broadcast': mapping['broadcast'],
                    'dns': ' '.join(mapping['dns']),
                    'address_v6': address_v6,
-                   'gateway6': gateway_v6,
+                   'gateway_v6': gateway_v6,
                    'netmask_v6': netmask_v6}
             nets.append(net_info)
 

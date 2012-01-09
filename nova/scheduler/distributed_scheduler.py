@@ -21,7 +21,6 @@ Weighing Functions.
 
 import json
 import operator
-import types
 
 import M2Crypto
 
@@ -301,7 +300,7 @@ class DistributedScheduler(driver.Scheduler):
         cost_functions = self.get_cost_functions()
 
         ram_requirement_mb = instance_type['memory_mb']
-        disk_requirement_bg = instance_type['local_gb']
+        disk_requirement_gb = instance_type['local_gb']
 
         options = self._get_configuration_options()
 
@@ -336,7 +335,7 @@ class DistributedScheduler(driver.Scheduler):
 
             # Now consume the resources so the filter/weights
             # will change for the next instance.
-            weighted_host.hostinfo.consume_resources(disk_requirement_bg,
+            weighted_host.hostinfo.consume_resources(disk_requirement_gb,
                                         ram_requirement_mb)
 
         # Next, tack on the host weights from the child zones
@@ -358,7 +357,7 @@ class DistributedScheduler(driver.Scheduler):
             return getattr(filters, nm)
 
         return [get_itm(itm) for itm in dir(filters)
-                if (type(get_itm(itm)) is types.TypeType)
+                if isinstance(get_itm(itm), type)
                 and issubclass(get_itm(itm), filters.AbstractHostFilter)
                 and get_itm(itm) is not filters.AbstractHostFilter]
 

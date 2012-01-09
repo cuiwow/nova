@@ -155,12 +155,13 @@ class ConsolesControllerTest(test.TestCase):
             pool = dict(console_type='fake_type',
                     public_hostname='fake_hostname')
             return dict(id=console_id, password='fake_password',
-                    port='fake_port', pool=pool)
+                    port='fake_port', pool=pool, instance_name='inst-0001')
 
         expected = {'console': {'id': 20,
                                 'port': 'fake_port',
                                 'host': 'fake_hostname',
                                 'password': 'fake_password',
+                                'instance_name': 'inst-0001',
                                 'console_type': 'fake_type'}}
 
         self.stubs.Set(console.API, 'get_console', fake_get_console)
@@ -254,9 +255,6 @@ class ConsolesControllerTest(test.TestCase):
 
 
 class TestConsolesXMLSerializer(test.TestCase):
-
-    serializer = consoles.ConsoleXMLSerializer()
-
     def test_show(self):
         fixture = {'console': {'id': 20,
                                'password': 'fake_password',
@@ -264,7 +262,7 @@ class TestConsolesXMLSerializer(test.TestCase):
                                'host': 'fake_hostname',
                                'console_type': 'fake_type'}}
 
-        output = self.serializer.serialize(fixture, 'show')
+        output = consoles.ConsoleTemplate().serialize(fixture)
         res_tree = etree.XML(output)
 
         self.assertEqual(res_tree.tag, 'console')
@@ -280,7 +278,7 @@ class TestConsolesXMLSerializer(test.TestCase):
                                 {'console': {'id': 11,
                                              'console_type': 'fake_type2'}}]}
 
-        output = self.serializer.serialize(fixture, 'index')
+        output = consoles.ConsolesTemplate().serialize(fixture)
         res_tree = etree.XML(output)
 
         self.assertEqual(res_tree.tag, 'consoles')

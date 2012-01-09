@@ -398,7 +398,7 @@ class CloudController(object):
             (out, err) = utils.execute('ssh-keygen', '-l', '-f',
                                        '%s' % (pubfile))
             return out.split(' ')[1]
-        except:
+        except Exception:
             raise
         finally:
             shutil.rmtree(tmpdir)
@@ -812,7 +812,7 @@ class CloudController(object):
         LOG.audit(_("Get console output for instance %s"), instance_id,
                   context=context)
         # instance_id may be passed in as a list of instances
-        if type(instance_id) == list:
+        if isinstance(instance_id, list):
             ec2_id = instance_id[0]
         else:
             ec2_id = instance_id
@@ -884,7 +884,7 @@ class CloudController(object):
                                    'volumeId': v['volumeId']}]
         else:
             v['attachmentSet'] = [{}]
-        if volume.get('snapshot_id') != None:
+        if volume.get('snapshot_id') is not None:
             v['snapshotId'] = ec2utils.id_to_ec2_snap_id(volume['snapshot_id'])
         else:
             v['snapshotId'] = None
@@ -895,7 +895,7 @@ class CloudController(object):
 
     def create_volume(self, context, **kwargs):
         size = kwargs.get('size')
-        if kwargs.get('snapshot_id') != None:
+        if kwargs.get('snapshot_id') is not None:
             snapshot_id = ec2utils.ec2_id_to_id(kwargs['snapshot_id'])
             LOG.audit(_("Create volume from snapshot %s"), snapshot_id,
                       context=context)
@@ -1425,7 +1425,7 @@ class CloudController(object):
                            'ari': 'ramdisk',
                            'ami': 'machine'}
         i['imageType'] = display_mapping.get(image_type)
-        i['isPublic'] = image.get('is_public') == True
+        i['isPublic'] = not not image.get('is_public')
         i['architecture'] = image['properties'].get('architecture')
 
         properties = image['properties']

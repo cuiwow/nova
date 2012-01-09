@@ -16,13 +16,14 @@
 
 """Test suite for XenAPI."""
 
+import ast
 import contextlib
+import datetime
 import functools
 import json
 import os
 import re
 import stubout
-import ast
 
 from nova import db
 from nova import context
@@ -332,7 +333,7 @@ class XenAPIVMTestCase(test.TestCase):
                               {'broadcast': '192.168.0.255',
                                'dns': ['192.168.0.1'],
                                'gateway': '192.168.0.1',
-                               'gateway6': 'dead:beef::1',
+                               'gateway_v6': 'dead:beef::1',
                                'ip6s': [{'enabled': '1',
                                          'ip': 'dead:beef::dcad:beff:feef:0',
                                                'netmask': '64'}],
@@ -419,7 +420,7 @@ class XenAPIVMTestCase(test.TestCase):
                           {'broadcast': '192.168.0.255',
                            'dns': ['192.168.0.1'],
                            'gateway': '192.168.0.1',
-                           'gateway6': 'dead:beef::1',
+                           'gateway_v6': 'dead:beef::1',
                            'ip6s': [{'enabled': '1',
                                      'ip': 'dead:beef::dcad:beff:feef:0',
                                            'netmask': '64'}],
@@ -625,11 +626,12 @@ class XenAPIVMTestCase(test.TestCase):
             self.network.set_network_host(ctxt, network)
 
         self.network.allocate_for_instance(ctxt,
-                                           instance_id=2,
-                                           host=FLAGS.host,
-                                           vpn=None,
-                                           instance_type_id=1,
-                                           project_id=self.project_id)
+                          instance_id=2,
+                          instance_uuid="00000000-0000-0000-0000-000000000000",
+                          host=FLAGS.host,
+                          vpn=None,
+                          instance_type_id=1,
+                          project_id=self.project_id)
         self._test_spawn(glance_stubs.FakeGlance.IMAGE_MACHINE,
                          glance_stubs.FakeGlance.IMAGE_KERNEL,
                          glance_stubs.FakeGlance.IMAGE_RAMDISK,
@@ -695,7 +697,7 @@ class XenAPIVMTestCase(test.TestCase):
                           {'broadcast': '192.168.0.255',
                            'dns': ['192.168.0.1'],
                            'gateway': '192.168.0.1',
-                           'gateway6': 'dead:beef::1',
+                           'gateway_v6': 'dead:beef::1',
                            'ip6s': [{'enabled': '1',
                                      'ip': 'dead:beef::dcad:beff:feef:0',
                                            'netmask': '64'}],
@@ -865,7 +867,7 @@ class XenAPIMigrateInstance(test.TestCase):
                           {'broadcast': '192.168.0.255',
                            'dns': ['192.168.0.1'],
                            'gateway': '192.168.0.1',
-                           'gateway6': 'dead:beef::1',
+                           'gateway_v6': 'dead:beef::1',
                            'ip6s': [{'enabled': '1',
                                      'ip': 'dead:beef::dcad:beff:feef:0',
                                            'netmask': '64'}],
@@ -907,7 +909,7 @@ class XenAPIMigrateInstance(test.TestCase):
                           {'broadcast': '192.168.0.255',
                            'dns': ['192.168.0.1'],
                            'gateway': '192.168.0.1',
-                           'gateway6': 'dead:beef::1',
+                           'gateway_v6': 'dead:beef::1',
                            'ip6s': [{'enabled': '1',
                                      'ip': 'dead:beef::dcad:beff:feef:0',
                                            'netmask': '64'}],
@@ -943,7 +945,7 @@ class XenAPIMigrateInstance(test.TestCase):
                           {'broadcast': '192.168.0.255',
                            'dns': ['192.168.0.1'],
                            'gateway': '192.168.0.1',
-                           'gateway6': 'dead:beef::1',
+                           'gateway_v6': 'dead:beef::1',
                            'ip6s': [{'enabled': '1',
                                      'ip': 'dead:beef::dcad:beff:feef:0',
                                            'netmask': '64'}],
@@ -973,7 +975,7 @@ class XenAPIMigrateInstance(test.TestCase):
                           {'broadcast': '192.168.0.255',
                            'dns': ['192.168.0.1'],
                            'gateway': '192.168.0.1',
-                           'gateway6': 'dead:beef::1',
+                           'gateway_v6': 'dead:beef::1',
                            'ip6s': [{'enabled': '1',
                                      'ip': 'dead:beef::dcad:beff:feef:0',
                                            'netmask': '64'}],
@@ -1225,3 +1227,28 @@ class XenAPIAutoDiskConfigTestCase(test.TestCase):
                        fake_get_partitions)
 
         self.assertIsPartitionCalled(True)
+
+
+class XenAPIBWUsageTestCase(test.TestCase):
+    def setUp(self):
+        super(XenAPIBWUsageTestCase, self).setUp()
+        self.stubs = stubout.StubOutForTesting()
+        self.stubs.Set(vm_utils.VMHelper, "compile_metrics",
+                       XenAPIBWUsageTestCase._fake_compile_metrics)
+        self.flags(target_host='127.0.0.1',
+                   xenapi_connection_url='test_url',
+                   xenapi_connection_password='test_pass')
+        stubs.stubout_session(self.stubs, stubs.FakeSessionForVMTests)
+        xenapi_fake.reset()
+        self.conn = xenapi_conn.get_connection(False)
+
+    @classmethod
+    def _fake_compile_metrics(cls, session, start_time, stop_time=None):
+        raise exception.CouldNotFetchMetrics()
+
+    def test_get_all_bw_usage_in_failure_case(self):
+        """Test that get_all_bw_usage returns an empty list when metrics
+        compilation failed.  c.f. bug #910045.
+        """
+        result = self.conn.get_all_bw_usage(datetime.datetime.utcnow())
+        self.assertEqual(result, [])

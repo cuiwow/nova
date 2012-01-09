@@ -463,11 +463,6 @@ def virtual_interface_get_by_uuid(context, vif_uuid):
     return IMPL.virtual_interface_get_by_uuid(context, vif_uuid)
 
 
-def virtual_interface_get_by_fixed_ip(context, fixed_ip_id):
-    """Gets the virtual interface fixed_ip is associated with."""
-    return IMPL.virtual_interface_get_by_fixed_ip(context, fixed_ip_id)
-
-
 def virtual_interface_get_by_instance(context, instance_id):
     """Gets all virtual_interfaces for instance."""
     return IMPL.virtual_interface_get_by_instance(context, instance_id)
@@ -580,16 +575,6 @@ def instance_get_all_by_reservation(context, reservation_id):
     return IMPL.instance_get_all_by_reservation(context, reservation_id)
 
 
-def instance_get_by_fixed_ip(context, address):
-    """Get an instance for a fixed ip by address."""
-    return IMPL.instance_get_by_fixed_ip(context, address)
-
-
-def instance_get_by_fixed_ipv6(context, address):
-    """Get an instance for a fixed ip by IPv6 address."""
-    return IMPL.instance_get_by_fixed_ipv6(context, address)
-
-
 def instance_get_fixed_addresses(context, instance_id):
     """Get the fixed ip address of an instance."""
     return IMPL.instance_get_fixed_addresses(context, instance_id)
@@ -683,14 +668,12 @@ def instance_info_cache_update(context, instance_id, values,
                                            session)
 
 
-def instance_info_cache_delete_by_instance_id(context, instance_id,
-                                              session=None):
+def instance_info_cache_delete(context, instance_id, session=None):
     """Deletes an existing instance_info_cache record
 
     :param instance_id: = id of the instance tied to the cache record
     """
-    return IMPL.instance_info_cache_delete_by_instance_id(context, instance_id,
-                                                          session)
+    return IMPL.instance_info_cache_delete(context, instance_id, session)
 
 
 ###################

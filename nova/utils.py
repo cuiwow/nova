@@ -33,7 +33,6 @@ import socket
 import struct
 import sys
 import time
-import types
 import uuid
 import pyclbr
 from xml.sax import saxutils
@@ -176,11 +175,11 @@ def execute(*cmd, **kwargs):
     process_input = kwargs.pop('process_input', None)
     check_exit_code = kwargs.pop('check_exit_code', [0])
     ignore_exit_code = False
-    if type(check_exit_code) == int:
-        check_exit_code = [check_exit_code]
-    elif type(check_exit_code) == bool:
+    if isinstance(check_exit_code, bool):
         ignore_exit_code = not check_exit_code
         check_exit_code = [0]
+    elif isinstance(check_exit_code, int):
+        check_exit_code = [check_exit_code]
     delay_on_retry = kwargs.pop('delay_on_retry', True)
     attempts = kwargs.pop('attempts', 1)
     run_as_root = kwargs.pop('run_as_root', False)
@@ -214,7 +213,7 @@ def execute(*cmd, **kwargs):
             _returncode = obj.returncode  # pylint: disable=E1101
             if _returncode:
                 LOG.debug(_('Result was %s') % _returncode)
-                if ignore_exit_code == False \
+                if not ignore_exit_code \
                     and _returncode not in check_exit_code:
                     (stdout, stderr) = result
                     raise exception.ProcessExecutionError(
@@ -544,7 +543,7 @@ def parse_mailmap(mailmap='.mailmap'):
             l = l.strip()
             if not l.startswith('#') and ' ' in l:
                 canonical_email, alias = l.split(' ')
-                mapping[alias] = canonical_email
+                mapping[alias.lower()] = canonical_email.lower()
     return mapping
 
 
@@ -569,7 +568,7 @@ class LazyPluggable(object):
                 raise exception.Error(_('Invalid backend: %s') % backend_name)
 
             backend = self.__backends[backend_name]
-            if type(backend) == type(tuple()):
+            if isinstance(backend, tuple):
                 name = backend[0]
                 fromlist = backend[1]
             else:
@@ -690,19 +689,27 @@ def to_primitive(value, convert_instances=False, level=0):
         if test(value):
             return unicode(value)
 
+    # FIXME(vish): Workaround for LP bug 852095. Without this workaround,
+    #              tests that raise an exception in a mocked method that
+    #              has a @wrap_exception with a notifier will fail. If
+    #              we up the dependency to 0.5.4 (when it is released) we
+    #              can remove this workaround.
+    if getattr(value, '__module__', None) == 'mox':
+        return 'mock'
+
     if level > 3:
         return '?'
 
     # The try block may not be necessary after the class check above,
     # but just in case ...
     try:
-        if type(value) is type([]) or type(value) is type((None,)):
+        if isinstance(value, (list, tuple)):
             o = []
             for v in value:
                 o.append(to_primitive(v, convert_instances=convert_instances,
                                       level=level))
             return o
-        elif type(value) is type({}):
+        elif isinstance(value, dict):
             o = {}
             for k, v in value.iteritems():
                 o[k] = to_primitive(v, convert_instances=convert_instances,
@@ -858,7 +865,7 @@ def get_from_path(items, path):
     if items is None:
         return results
 
-    if not isinstance(items, types.ListType):
+    if not isinstance(items, list):
         # Wrap single objects in a list
         items = [items]
 
@@ -871,7 +878,7 @@ def get_from_path(items, path):
         child = get_method(first_token)
         if child is None:
             continue
-        if isinstance(child, types.ListType):
+        if isinstance(child, list):
             # Flatten intermediate lists
             for x in child:
                 results.append(x)
@@ -1181,3 +1188,31 @@ def read_cached_file(filename, cache_info):
     cache_info['data'] = data
     cache_info['mtime'] = mtime
     return data
+
+
+@contextlib.contextmanager
+def temporary_mutation(obj, **kwargs):
+    """Temporarily set the attr on a particular object to a given value then
+    revert when finished.
+
+    One use of this is to temporarily set the read_deleted flag on a context
+    object:
+
+        with temporary_mutation(context, read_deleted="yes"):
+            do_something_that_needed_deleted_objects()
+    """
+    NOT_PRESENT = object()
+
+    old_values = {}
+    for attr, new_value in kwargs.items():
+        old_values[attr] = getattr(obj, attr, NOT_PRESENT)
+        setattr(obj, attr, new_value)
+
+    try:
+        yield
+    finally:
+        for attr, old_value in old_values.items():
+            if old_value is NOT_PRESENT:
+                del obj[attr]
+            else:
+                setattr(obj, attr, old_value)

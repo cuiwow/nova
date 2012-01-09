@@ -41,11 +41,11 @@ class LibvirtBridgeDriver(VIFDriver):
     def _get_configurations(self, network, mapping):
         """Get a dictionary of VIF configurations for bridge type."""
         # Assume that the gateway also acts as the dhcp server.
-        gateway6 = mapping.get('gateway6')
+        gateway_v6 = mapping.get('gateway_v6')
         mac_id = mapping['mac'].replace(':', '')
 
         if FLAGS.allow_same_net_traffic:
-            template = "<parameter name=\"%s\"value=\"%s\" />\n"
+            template = "<parameter name=\"%s\" value=\"%s\" />\n"
             net, mask = netutils.get_net_and_mask(network['cidr'])
             values = [("PROJNET", net), ("PROJMASK", mask)]
             if FLAGS.use_ipv6:
@@ -67,8 +67,8 @@ class LibvirtBridgeDriver(VIFDriver):
             'extra_params': extra_params,
         }
 
-        if gateway6:
-            result['gateway6'] = gateway6 + "/128"
+        if gateway_v6:
+            result['gateway_v6'] = gateway_v6 + "/128"
 
         return result
 
