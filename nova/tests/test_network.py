@@ -1,6 +1,7 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 
 # Copyright 2011 Rackspace
+# Copyright (c) 2011 X.commerce, a business unit of eBay Inc.
 # All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -108,6 +109,8 @@ flavor = {'id': 0,
 
 floating_ip_fields = {'id': 0,
                       'address': '192.168.10.100',
+                      'pool': 'nova',
+                      'interface': 'eth0',
                       'fixed_ip_id': 0,
                       'project_id': None,
                       'auto_assigned': False}
@@ -302,21 +305,22 @@ class FlatNetworkTestCase(test.TestCase):
         driver.create_entry("hostthree", "10.0.0.3", 0, zone1)
         driver.create_entry("hostfour", "10.0.0.4", 0, zone1)
         driver.create_entry("hostfive", "10.0.0.5", 0, zone2)
-        driver.create_entry("hostsix", "10.0.0.6", 0, zone2)
-        driver.delete_entry("hosttwo", zone1)
-        driver.rename_entry("10.0.0.3", "hostone", zone1)
+
+        driver.delete_entry("hostone", zone1)
         driver.modify_address("hostfour", "10.0.0.1", zone1)
+        driver.modify_address("hostthree", "10.0.0.1", zone1)
         names = driver.get_entries_by_address("10.0.0.1", zone1)
         self.assertEqual(len(names), 2)
-        self.assertIn('hostone', names)
+        self.assertIn('hostthree', names)
         self.assertIn('hostfour', names)
-        names = driver.get_entries_by_address("10.0.0.6", zone2)
+
+        names = driver.get_entries_by_address("10.0.0.5", zone2)
         self.assertEqual(len(names), 1)
-        self.assertIn('hostsix', names)
-        addresses = driver.get_entries_by_name("hostone", zone1)
-        self.assertEqual(len(addresses), 2)
-        self.assertIn('10.0.0.1', addresses)
-        self.assertIn('10.0.0.3', addresses)
+        self.assertIn('hostfive', names)
+
+        addresses = driver.get_entries_by_name("hosttwo", zone1)
+        self.assertEqual(len(addresses), 1)
+        self.assertIn('10.0.0.2', addresses)
 
     def test_instance_dns(self):
         fixedip = '192.168.0.101'
@@ -580,21 +584,29 @@ class VlanNetworkTestCase(test.TestCase):
         # floating ip that's already associated
         def fake2(*args, **kwargs):
             return {'address': '10.0.0.1',
+                    'pool': 'nova',
+                    'interface': 'eth0',
                     'fixed_ip_id': 1}
 
         # floating ip that isn't associated
         def fake3(*args, **kwargs):
             return {'address': '10.0.0.1',
+                    'pool': 'nova',
+                    'interface': 'eth0',
                     'fixed_ip_id': None}
 
         # fixed ip with remote host
         def fake4(*args, **kwargs):
             return {'address': '10.0.0.1',
+                    'pool': 'nova',
+                    'interface': 'eth0',
                     'network': {'multi_host': False, 'host': 'jibberjabber'}}
 
         # fixed ip with local host
         def fake5(*args, **kwargs):
             return {'address': '10.0.0.1',
+                    'pool': 'nova',
+                    'interface': 'eth0',
                     'network': {'multi_host': False, 'host': 'testhost'}}
 
         def fake6(*args, **kwargs):
@@ -641,21 +653,29 @@ class VlanNetworkTestCase(test.TestCase):
         # floating ip that isn't associated
         def fake2(*args, **kwargs):
             return {'address': '10.0.0.1',
+                    'pool': 'nova',
+                    'interface': 'eth0',
                     'fixed_ip_id': None}
 
         # floating ip that is associated
         def fake3(*args, **kwargs):
             return {'address': '10.0.0.1',
+                    'pool': 'nova',
+                    'interface': 'eth0',
                     'fixed_ip_id': 1}
 
         # fixed ip with remote host
         def fake4(*args, **kwargs):
             return {'address': '10.0.0.1',
+                    'pool': 'nova',
+                    'interface': 'eth0',
                     'network': {'multi_host': False, 'host': 'jibberjabber'}}
 
         # fixed ip with local host
         def fake5(*args, **kwargs):
             return {'address': '10.0.0.1',
+                    'pool': 'nova',
+                    'interface': 'eth0',
                     'network': {'multi_host': False, 'host': 'testhost'}}
 
         def fake6(*args, **kwargs):
