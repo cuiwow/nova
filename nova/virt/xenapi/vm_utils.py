@@ -532,7 +532,7 @@ class VMHelper(HelperBase):
         Returns: A list of dictionaries that describe VDIs
         """
         args = {}
-        args['cached-image'] = '%08x' % int(image)
+        args['cached-image'] = image
         args['new-image-uuid'] = str(uuid.uuid4())
         task = session.async_call_plugin('glance', "create_kernel_ramdisk",
                                           args)
@@ -809,7 +809,7 @@ class VMHelper(HelperBase):
                 args['vdi-ref'] = vdi_ref
                 # Let the plugin copy the correct number of bytes.
                 args['image-size'] = str(vdi_size)
-                args['cached-image'] = '%08x' % int(image)
+                args['cached-image'] = image
                 task = session.async_call_plugin('glance', fn, args)
                 filename = session.wait_for_task(task, instance['uuid'])
                 # Remove the VDI as it is not needed anymore.
