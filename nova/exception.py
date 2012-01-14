@@ -91,10 +91,6 @@ class ApiError(Error):
         super(ApiError, self).__init__(outstr)
 
 
-class RebuildRequiresActiveInstance(Error):
-    pass
-
-
 class DBError(Error):
     """Wraps an implementation specific exception."""
     def __init__(self, inner_exception=None):
@@ -207,20 +203,8 @@ class AdminRequired(NotAuthorized):
     message = _("User does not have admin privileges")
 
 
-class PolicyNotAllowed(NotAuthorized):
+class PolicyNotAuthorized(NotAuthorized):
     message = _("Policy Doesn't allow %(action)s to be performed.")
-
-
-class InstanceBusy(NovaException):
-    message = _("Instance %(instance_id)s is busy. (%(task_state)s)")
-
-
-class InstanceSnapshotting(InstanceBusy):
-    message = _("Instance %(instance_uuid)s is currently snapshotting.")
-
-
-class InstanceBackingUp(InstanceBusy):
-    message = _("Instance %(instance_uuid)s is currently being backed up.")
 
 
 class Invalid(NovaException):
@@ -313,6 +297,10 @@ class ComputeServiceUnavailable(ServiceUnavailable):
 class UnableToMigrateToSelf(Invalid):
     message = _("Unable to migrate instance (%(instance_id)s) "
                 "to current host (%(host)s).")
+
+
+class DestinationHostUnavailable(Invalid):
+    message = _("Destination compute host is unavailable at this time.")
 
 
 class SourceHostUnavailable(Invalid):

@@ -19,11 +19,8 @@
 import gettext
 import glob
 import os
-import subprocess
-import sys
 
 from setuptools import find_packages
-from setuptools.command.sdist import sdist
 
 # In order to run the i18n commands for compiling and
 # installing message catalogs, we use DistUtilsExtra.
@@ -87,7 +84,8 @@ setup(name='nova',
                'bin/nova-api',
                'bin/nova-api-ec2',
                'bin/nova-api-metadata',
-               'bin/nova-api-os',
+               'bin/nova-api-os-compute',
+               'bin/nova-api-os-volume',
                'bin/nova-compute',
                'bin/nova-console',
                'bin/nova-dhcpbridge',

@@ -162,8 +162,7 @@ class FakeConnection(driver.ComputeDriver):
     def resume(self, instance):
         pass
 
-    def destroy(self, instance, network_info, block_device_info=None,
-                cleanup=True):
+    def destroy(self, instance, network_info, block_device_info=None):
         key = instance['name']
         if key in self.instances:
             del self.instances[key]
@@ -284,7 +283,7 @@ class FakeConnection(driver.ComputeDriver):
         """This method is supported only by libvirt."""
         raise NotImplementedError('This method is supported only by libvirt.')
 
-    def get_instance_disk_info(self, ctxt, instance_ref):
+    def get_instance_disk_info(self, instance_name):
         """This method is supported only by libvirt."""
         return
 
@@ -319,4 +318,8 @@ class FakeConnection(driver.ComputeDriver):
 
     def set_host_enabled(self, host, enabled):
         """Sets the specified host's ability to accept new instances."""
+        pass
+
+    def get_disk_available_least(self):
+        """ """
         pass

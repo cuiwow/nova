@@ -1023,8 +1023,11 @@ class NetworkManager(manager.SchedulerDependentManager):
 
         instance_ref = self.db.instance_get(context, instance_id)
         name = instance_ref['display_name']
+        uuid = instance_ref['uuid']
         self.instance_dns_manager.create_entry(name, address,
-                                               "type", FLAGS.instance_dns_zone)
+                                               "A", FLAGS.instance_dns_zone)
+        self.instance_dns_manager.create_entry(uuid, address,
+                                               "A", FLAGS.instance_dns_zone)
 
         self._setup_network(context, network)
         return address
@@ -1304,6 +1307,23 @@ class NetworkManager(manager.SchedulerDependentManager):
         """Returns the vifs associated with an instance"""
         vifs = self.db.virtual_interface_get_by_instance(context, instance_id)
         return [dict(vif.iteritems()) for vif in vifs]
+
+    def get_network(self, context, network_uuid):
+        networks = self._get_networks_by_uuids(context, [network_uuid])
+        try:
+            network = networks[0]
+        except (IndexError, TypeError):
+            raise exception.NetworkNotFound(network_id=network_uuid)
+
+        return dict(network.iteritems())
+
+    def get_all_networks(self, context):
+        networks = self.db.network_get_all(context)
+        return [dict(network.iteritems()) for network in networks]
+
+    def disassociate_network(self, context, network_uuid):
+        network = self.get_network(context, network_uuid)
+        self.db.network_disassociate(context, network['id'])
 
 
 class FlatManager(NetworkManager):

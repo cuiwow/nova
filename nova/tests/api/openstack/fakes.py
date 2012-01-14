@@ -17,20 +17,21 @@
 
 import datetime
 
+import routes
 import webob
 import webob.dec
 import webob.request
 
 from glance import client as glance_client
 
-import nova.api.openstack.v2.auth
 from nova.api import auth as api_auth
-from nova.api.openstack import v2
-from nova.api.openstack.v2 import auth
-from nova.api.openstack.v2 import extensions
-from nova.api.openstack.v2 import limits
-from nova.api.openstack.v2 import urlmap
-from nova.api.openstack.v2 import versions
+from nova.api import openstack as openstack_api
+from nova.api.openstack import compute
+from nova.api.openstack import auth
+from nova.api.openstack.compute import extensions
+from nova.api.openstack.compute import limits
+from nova.api.openstack import urlmap
+from nova.api.openstack.compute import versions
 from nova.api.openstack import wsgi as os_wsgi
 from nova.auth.manager import User, Project
 from nova.compute import instance_types
@@ -76,24 +77,24 @@ def wsgi_app(inner_app_v2=None, fake_auth=True, fake_auth_context=None,
         serialization=os_wsgi.LazySerializationMiddleware,
         use_no_auth=False):
     if not inner_app_v2:
-        inner_app_v2 = v2.APIRouter()
+        inner_app_v2 = compute.APIRouter()
 
     if fake_auth:
         if fake_auth_context is not None:
             ctxt = fake_auth_context
         else:
             ctxt = context.RequestContext('fake', 'fake', auth_token=True)
-        api_v2 = v2.FaultWrapper(api_auth.InjectContext(ctxt,
+        api_v2 = openstack_api.FaultWrapper(api_auth.InjectContext(ctxt,
               limits.RateLimitingMiddleware(
                   serialization(
                       extensions.ExtensionMiddleware(inner_app_v2)))))
     elif use_no_auth:
-        api_v2 = v2.FaultWrapper(auth.NoAuthMiddleware(
+        api_v2 = openstack_api.FaultWrapper(auth.NoAuthMiddleware(
               limits.RateLimitingMiddleware(
                   serialization(
                       extensions.ExtensionMiddleware(inner_app_v2)))))
     else:
-        api_v2 = v2.FaultWrapper(auth.AuthMiddleware(
+        api_v2 = openstack_api.FaultWrapper(auth.AuthMiddleware(
               limits.RateLimitingMiddleware(
                   serialization(
                       extensions.ExtensionMiddleware(inner_app_v2)))))
@@ -101,7 +102,7 @@ def wsgi_app(inner_app_v2=None, fake_auth=True, fake_auth_context=None,
     mapper = urlmap.URLMap()
     mapper['/v2'] = api_v2
     mapper['/v1.1'] = api_v2
-    mapper['/'] = v2.FaultWrapper(versions.Versions())
+    mapper['/'] = openstack_api.FaultWrapper(versions.Versions())
     return mapper
 
 
@@ -137,9 +138,9 @@ def stub_out_auth(stubs):
     def fake_auth_init(self, app):
         self.application = app
 
-    stubs.Set(nova.api.openstack.v2.auth.AuthMiddleware,
+    stubs.Set(auth.AuthMiddleware,
         '__init__', fake_auth_init)
-    stubs.Set(nova.api.openstack.v2.auth.AuthMiddleware,
+    stubs.Set(auth.AuthMiddleware,
         '__call__', fake_wsgi)
 
 
@@ -148,10 +149,10 @@ def stub_out_rate_limiting(stubs):
         super(limits.RateLimitingMiddleware, self).__init__(app)
         self.application = app
 
-    stubs.Set(nova.api.openstack.v2.limits.RateLimitingMiddleware,
+    stubs.Set(nova.api.openstack.compute.limits.RateLimitingMiddleware,
         '__init__', fake_rate_init)
 
-    stubs.Set(nova.api.openstack.v2.limits.RateLimitingMiddleware,
+    stubs.Set(nova.api.openstack.compute.limits.RateLimitingMiddleware,
         '__call__', fake_wsgi)
 
 
@@ -316,6 +317,14 @@ class HTTPRequest(webob.Request):
         out.environ['nova.context'] = FakeRequestContext('fake_user', 'fake',
                 is_admin=use_admin_context)
         return out
+
+
+class TestRouter(wsgi.Router):
+    def __init__(self, controller):
+        mapper = routes.Mapper()
+        mapper.resource("test", "tests",
+                        controller=os_wsgi.Resource(controller))
+        super(TestRouter, self).__init__(mapper)
 
 
 class FakeAuthDatabase(object):
@@ -560,6 +569,8 @@ def stub_instance(id, user_id='fake', project_id='fake', host=None,
         "progress": progress,
         "auto_disk_config": auto_disk_config,
         "name": "instance-%s" % id,
-        "fixed_ips": fixed_ips}
+        "fixed_ips": fixed_ips,
+        "shutdown_terminate": True,
+        "disable_terminate": False}
 
     return instance

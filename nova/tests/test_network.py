@@ -26,7 +26,6 @@ from nova import rpc
 from nova import test
 from nova import utils
 from nova.network import manager as network_manager
-from nova.network import api as network_api
 from nova.tests import fake_network
 
 
@@ -285,7 +284,8 @@ class FlatNetworkTestCase(test.TestCase):
                         mox.IgnoreArg()).AndReturn({'security_groups':
                                                              [{'id': 0}]})
         db.instance_get(self.context,
-                        1).AndReturn({'display_name': HOST})
+                        1).AndReturn({'display_name': HOST,
+                                      'uuid': 'test-00001'})
         db.fixed_ip_associate_pool(mox.IgnoreArg(),
                                    mox.IgnoreArg(),
                                    mox.IgnoreArg()).AndReturn('192.168.0.101')
@@ -300,11 +300,11 @@ class FlatNetworkTestCase(test.TestCase):
         zone1 = "example.org"
         zone2 = "example.com"
         driver = self.network.instance_dns_manager
-        driver.create_entry("hostone", "10.0.0.1", 0, zone1)
-        driver.create_entry("hosttwo", "10.0.0.2", 0, zone1)
-        driver.create_entry("hostthree", "10.0.0.3", 0, zone1)
-        driver.create_entry("hostfour", "10.0.0.4", 0, zone1)
-        driver.create_entry("hostfive", "10.0.0.5", 0, zone2)
+        driver.create_entry("hostone", "10.0.0.1", "A", zone1)
+        driver.create_entry("hosttwo", "10.0.0.2", "A", zone1)
+        driver.create_entry("hostthree", "10.0.0.3", "A", zone1)
+        driver.create_entry("hostfour", "10.0.0.4", "A", zone1)
+        driver.create_entry("hostfive", "10.0.0.5", "A", zone2)
 
         driver.delete_entry("hostone", zone1)
         driver.modify_address("hostfour", "10.0.0.1", zone1)
@@ -321,6 +321,13 @@ class FlatNetworkTestCase(test.TestCase):
         addresses = driver.get_entries_by_name("hosttwo", zone1)
         self.assertEqual(len(addresses), 1)
         self.assertIn('10.0.0.2', addresses)
+
+        self.assertRaises(exception.InvalidInput,
+                driver.create_entry,
+                "hostname",
+                "10.10.10.10",
+                "invalidtype",
+                zone1)
 
     def test_instance_dns(self):
         fixedip = '192.168.0.101'
@@ -343,17 +350,23 @@ class FlatNetworkTestCase(test.TestCase):
                                                              [{'id': 0}]})
 
         db.instance_get(self.context,
-                        1).AndReturn({'display_name': HOST})
+                        1).AndReturn({'display_name': HOST,
+                                      'uuid': 'test-00001'})
         db.fixed_ip_associate_pool(mox.IgnoreArg(),
                                    mox.IgnoreArg(),
                                    mox.IgnoreArg()).AndReturn(fixedip)
         db.network_get(mox.IgnoreArg(),
                        mox.IgnoreArg()).AndReturn(networks[0])
         db.network_update(mox.IgnoreArg(), mox.IgnoreArg(), mox.IgnoreArg())
+
         self.mox.ReplayAll()
         self.network.add_fixed_ip_to_instance(self.context, 1, HOST,
                                               networks[0]['id'])
-        addresses = self.network.instance_dns_manager.get_entries_by_name(HOST)
+        instance_manager = self.network.instance_dns_manager
+        addresses = instance_manager.get_entries_by_name(HOST)
+        self.assertEqual(len(addresses), 1)
+        self.assertEqual(addresses[0], fixedip)
+        addresses = instance_manager.get_entries_by_name('test-00001')
         self.assertEqual(len(addresses), 1)
         self.assertEqual(addresses[0], fixedip)
 
@@ -1100,6 +1113,67 @@ class CommonNetworkTestCase(test.TestCase):
         self.assertTrue(res)
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]['instance_id'], _vifs[2]['instance_id'])
+
+    def test_get_network(self):
+        manager = fake_network.FakeNetworkManager()
+        fake_context = context.RequestContext('user', 'project')
+        self.mox.StubOutWithMock(manager.db, 'network_get_all_by_uuids')
+        manager.db.network_get_all_by_uuids(mox.IgnoreArg(),
+                                            mox.IgnoreArg()).\
+                                            AndReturn(networks)
+        self.mox.ReplayAll()
+        uuid = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+        network = manager.get_network(fake_context, uuid)
+        self.assertEqual(network['uuid'], uuid)
+
+    def test_get_network_not_found(self):
+        manager = fake_network.FakeNetworkManager()
+        fake_context = context.RequestContext('user', 'project')
+        self.mox.StubOutWithMock(manager.db, 'network_get_all_by_uuids')
+        manager.db.network_get_all_by_uuids(mox.IgnoreArg(),
+                                            mox.IgnoreArg()).\
+                                            AndReturn([])
+        self.mox.ReplayAll()
+        uuid = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
+        self.assertRaises(exception.NetworkNotFound,
+                          manager.get_network, fake_context, uuid)
+
+    def test_get_all_networks(self):
+        manager = fake_network.FakeNetworkManager()
+        fake_context = context.RequestContext('user', 'project')
+        self.mox.StubOutWithMock(manager.db, 'network_get_all')
+        manager.db.network_get_all(mox.IgnoreArg()).\
+                                   AndReturn(networks)
+        self.mox.ReplayAll()
+        output = manager.get_all_networks(fake_context)
+        self.assertEqual(len(networks), 2)
+        self.assertEqual(output[0]['uuid'],
+                         'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+        self.assertEqual(output[1]['uuid'],
+                         'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')
+
+    def test_disassociate_network(self):
+        manager = fake_network.FakeNetworkManager()
+        fake_context = context.RequestContext('user', 'project')
+        self.mox.StubOutWithMock(manager.db, 'network_get_all_by_uuids')
+        manager.db.network_get_all_by_uuids(mox.IgnoreArg(),
+                                            mox.IgnoreArg()).\
+                                            AndReturn(networks)
+        self.mox.ReplayAll()
+        uuid = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+        manager.disassociate_network(fake_context, uuid)
+
+    def test_disassociate_network_not_found(self):
+        manager = fake_network.FakeNetworkManager()
+        fake_context = context.RequestContext('user', 'project')
+        self.mox.StubOutWithMock(manager.db, 'network_get_all_by_uuids')
+        manager.db.network_get_all_by_uuids(mox.IgnoreArg(),
+                                            mox.IgnoreArg()).\
+                                            AndReturn([])
+        self.mox.ReplayAll()
+        uuid = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
+        self.assertRaises(exception.NetworkNotFound,
+                          manager.disassociate_network, fake_context, uuid)
 
 
 class TestRPCFixedManager(network_manager.RPCAllocateFixedIP,
