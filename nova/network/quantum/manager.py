@@ -48,6 +48,9 @@ flags.DEFINE_bool('use_melange_mac_generation', False,
 flags.DEFINE_bool('quantum_use_dhcp', False,
                     'Whether or not to enable DHCP for networks')
 
+flags.DEFINE_bool('quantum_use_port_security', False,
+                  'Whether or not to enable port security')
+
 
 class QuantumManager(manager.FlatManager):
     """NetworkManager class that communicates with a Quantum service
@@ -94,11 +97,14 @@ class QuantumManager(manager.FlatManager):
         self.driver.ensure_metadata_ip()
         self.driver.metadata_forward()
 
-    def _get_nova_id(self, context):
+    def _get_nova_id(self, instance=None):
         # When creating the network we need to pass in an identifier for
         # this zone.  Some Quantum plugins need this information in order
         # to set up appropriate networking.
-        return FLAGS.node_availability_zone
+        if instance and instance['availability_zone']:
+            return instance['availability_zone']
+        else:
+            return FLAGS.node_availability_zone
 
     def get_all_networks(self):
         networks = []
@@ -135,7 +141,7 @@ class QuantumManager(manager.FlatManager):
                         " network for tenant '%(q_tenant_id)s' with "
                         "net-id '%(quantum_net_id)s'" % locals()))
         else:
-            nova_id = self._get_nova_id(context)
+            nova_id = self._get_nova_id()
             quantum_net_id = self.q_conn.create_network(q_tenant_id, label,
                                                         nova_id=nova_id)
 
@@ -279,16 +285,22 @@ class QuantumManager(manager.FlatManager):
             instance = db.instance_get(context, instance_id)
             instance_type = instance_types.get_instance_type(instance_type_id)
             rxtx_factor = instance_type['rxtx_factor']
-            nova_id = self._get_nova_id(context)
+            nova_id = self._get_nova_id(instance)
             q_tenant_id = project_id or FLAGS.quantum_default_tenant_id
+            # Tell the ipam library to allocate an IP
+            ip = self.ipam.allocate_fixed_ip(context, project_id,
+                    quantum_net_id, vif_rec)
+            pairs = []
+            # Set up port security if enabled
+            if FLAGS.quantum_use_port_security:
+                pairs = [{'mac_address': vif_rec['address'],
+                          'ip_address': ip}]
             self.q_conn.create_and_attach_port(q_tenant_id, quantum_net_id,
                                                vif_rec['uuid'],
                                                vm_id=instance['uuid'],
                                                rxtx_factor=rxtx_factor,
-                                               nova_id=nova_id)
-            # Tell melange to allocate an IP
-            ip = self.ipam.allocate_fixed_ip(context, project_id,
-                    quantum_net_id, vif_rec)
+                                               nova_id=nova_id,
+                                               allowed_address_pairs=pairs)
             # Set up/start the dhcp server for this network if necessary
             if FLAGS.quantum_use_dhcp:
                 self.enable_dhcp(context, quantum_net_id, network_ref,
