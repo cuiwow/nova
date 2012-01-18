@@ -193,11 +193,6 @@ class FakeSessionForVMTests(fake.SessionBase):
                                      vdi_uuid=_make_fake_vdi()),
                                 dict(vdi_type='swap',
                                      vdi_uuid=_make_fake_vdi()))
-        elif (plugin, method) == ('glance', 'snapshot_vhd'):
-            return fake.as_json(dict(vdi_type='os',
-                                     vdi_uuid=_make_fake_vdi()),
-                                dict(vdi_type='swap',
-                                     vdi_uuid=_make_fake_vdi()))
         else:
             return (super(FakeSessionForVMTests, self).
                     host_call_plugin(_1, _2, plugin, method, _5))
