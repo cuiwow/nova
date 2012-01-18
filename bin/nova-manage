@@ -1218,7 +1218,7 @@ class VersionCommands(object):
         pass
 
     def list(self):
-        print _("%s (%s)") % \
+        print _("%s (%s)") %\
                 (version.version_string(), version.version_string_with_vcs())
 
     def __call__(self):
@@ -1245,7 +1245,7 @@ class VsaCommands(object):
                     "%(stat)-10s %(host)-15s %(time)s"
 
     def _print_vsa_header(self):
-        print self._format_str_vsa % \
+        print self._format_str_vsa %\
                dict(id=_('ID'),
                     vsa_id=_('vsa_id'),
                     name=_('displayName'),
@@ -1257,7 +1257,7 @@ class VsaCommands(object):
                     time=_('createTime'))
 
     def _print_vsa(self, vsa):
-        print self._format_str_vsa % \
+        print self._format_str_vsa %\
                 dict(id=vsa['id'],
                      vsa_id=vsa['name'],
                      name=vsa['display_name'],
@@ -1270,7 +1270,7 @@ class VsaCommands(object):
 
     def _print_volume_header(self):
         print _('      === Volumes ===')
-        print self._format_str_volume % \
+        print self._format_str_volume %\
                 dict(id=_('ID'),
                      name=_('name'),
                      size=_('size'),
@@ -1279,7 +1279,7 @@ class VsaCommands(object):
                      time=_('createTime'))
 
     def _print_volume(self, vol):
-        print self._format_str_volume % \
+        print self._format_str_volume %\
                 dict(id=vol['id'],
                      name=vol['display_name'] or vol['name'],
                      size=vol['size'],
@@ -1289,7 +1289,7 @@ class VsaCommands(object):
 
     def _print_drive_header(self):
         print _('      === Drives ===')
-        print self._format_str_drive % \
+        print self._format_str_drive %\
                 dict(id=_('ID'),
                     name=_('name'),
                     size=_('size'),
@@ -1305,7 +1305,7 @@ class VsaCommands(object):
         else:
             drive_type_name = ''
 
-        print self._format_str_drive % \
+        print self._format_str_drive %\
                 dict(id=drive['id'],
                     name=drive['display_name'],
                     size=drive['size'],
@@ -1317,7 +1317,7 @@ class VsaCommands(object):
 
     def _print_instance_header(self):
         print _('      === Instances ===')
-        print self._format_str_instance % \
+        print self._format_str_instance %\
                 dict(id=_('ID'),
                     name=_('name'),
                     dname=_('disp_name'),
@@ -1340,7 +1340,7 @@ class VsaCommands(object):
                 floating_addr = fixed['floating_ips'][0]['address']
         floating_addr = floating_addr or fixed_addr
 
-        print self._format_str_instance % \
+        print self._format_str_instance %\
                 dict(id=vc['id'],
                     name=ec2utils.id_to_ec2_id(vc['id']),
                     dname=vc['display_name'],
@@ -1551,7 +1551,7 @@ class VsaDriveTypeCommands(object):
     def _list(self, drives):
         format_str = "%-5s %-30s %-10s %-10s %-10s %-20s %-10s %s"
         if len(drives):
-            print format_str % \
+            print format_str %\
                    (_('ID'),
                     _('name'),
                     _('type'),
@@ -1563,7 +1563,7 @@ class VsaDriveTypeCommands(object):
 
         for name, vol_type in drives.iteritems():
             drive = vol_type.get('extra_specs')
-            print format_str % \
+            print format_str %\
                 (str(vol_type['id']),
                 drive['drive_name'],
                 drive['drive_type'],
@@ -2337,7 +2337,7 @@ def main():
 
     script_name = argv.pop(0)
     if len(argv) < 1:
-        print _("\nOpenStack Nova version: %s (%s)\n") % \
+        print _("\nOpenStack Nova version: %s (%s)\n") %\
                 (version.version_string(), version.version_string_with_vcs())
         print script_name + " category action [<args>]"
         print _("Available categories:")

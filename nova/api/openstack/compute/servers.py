@@ -16,6 +16,7 @@
 
 import base64
 import os
+import socket
 from xml.dom import minidom
 
 from webob import exc
@@ -276,6 +277,9 @@ class ActionDeserializer(CommonDeserializer):
         if node.hasAttribute("name"):
             rebuild['name'] = node.getAttribute("name")
 
+        if node.hasAttribute("auto_disk_config"):
+            rebuild['auto_disk_config'] = node.getAttribute("auto_disk_config")
+
         metadata_node = self.find_first_child_named(node, "metadata")
         if metadata_node is not None:
             rebuild["metadata"] = self.extract_metadata(metadata_node)
@@ -291,9 +295,17 @@ class ActionDeserializer(CommonDeserializer):
         return rebuild
 
     def _action_resize(self, node):
-        if not node.hasAttribute("flavorRef"):
+        resize = {}
+
+        if node.hasAttribute("flavorRef"):
+            resize["flavorRef"] = node.getAttribute("flavorRef")
+        else:
             raise AttributeError("No flavorRef was specified in request")
-        return {"flavorRef": node.getAttribute("flavorRef")}
+
+        if node.hasAttribute("auto_disk_config"):
+            rezise['auto_disk_config'] = node.getAttribute("auto_disk_config")
+
+        return resize
 
     def _action_confirm_resize(self, node):
         return None
@@ -568,6 +580,20 @@ class Controller(wsgi.Controller):
             expl = _('Userdata content cannot be decoded')
             raise exc.HTTPBadRequest(explanation=expl)
 
+    def _validate_access_ipv4(self, address):
+        try:
+            socket.inet_aton(address)
+        except socket.error:
+            expl = _('accessIPv4 is not proper IPv4 format')
+            raise exc.HTTPBadRequest(explanation=expl)
+
+    def _validate_access_ipv6(self, address):
+        try:
+            socket.inet_pton(socket.AF_INET6, address)
+        except socket.error:
+            expl = _('accessIPv4 is not proper IPv4 format')
+            raise exc.HTTPBadRequest(explanation=expl)
+
     @wsgi.serializers(xml=ServerTemplate)
     @exception.novaclient_converter
     @scheduler_api.redirect_handler
@@ -634,6 +660,14 @@ class Controller(wsgi.Controller):
             requested_networks = self._get_requested_networks(
                                                     requested_networks)
 
+        (access_ip_v4, ) = server_dict.get('accessIPv4'),
+        if access_ip_v4 is not None:
+            self._validate_access_ipv4(access_ip_v4)
+
+        (access_ip_v6, ) = server_dict.get('accessIPv6'),
+        if access_ip_v6 is not None:
+            self._validate_access_ipv6(access_ip_v6)
+
         try:
             flavor_id = self._flavor_id_from_req_data(body)
         except ValueError as error:
@@ -687,8 +721,8 @@ class Controller(wsgi.Controller):
                             display_description=name,
                             key_name=key_name,
                             metadata=server_dict.get('metadata', {}),
-                            access_ip_v4=server_dict.get('accessIPv4'),
-                            access_ip_v6=server_dict.get('accessIPv6'),
+                            access_ip_v4=access_ip_v4,
+                            access_ip_v6=access_ip_v6,
                             injected_files=injected_files,
                             admin_password=password,
                             zone_blob=zone_blob,
@@ -767,10 +801,12 @@ class Controller(wsgi.Controller):
 
         if 'accessIPv4' in body['server']:
             access_ipv4 = body['server']['accessIPv4']
+            self._validate_access_ipv4(access_ipv4)
             update_dict['access_ip_v4'] = access_ipv4.strip()
 
         if 'accessIPv6' in body['server']:
             access_ipv6 = body['server']['accessIPv6']
+            self._validate_access_ipv6(access_ipv6)
             update_dict['access_ip_v6'] = access_ipv6.strip()
 
         if 'auto_disk_config' in body['server']:
@@ -866,13 +902,13 @@ class Controller(wsgi.Controller):
             raise exc.HTTPUnprocessableEntity()
         return webob.Response(status_int=202)
 
-    def _resize(self, req, instance_id, flavor_id):
+    def _resize(self, req, instance_id, flavor_id, **kwargs):
         """Begin the resize process with given instance/flavor."""
         context = req.environ["nova.context"]
         instance = self._get_server(context, instance_id)
 
         try:
-            self.compute_api.resize(context, instance, flavor_id)
+            self.compute_api.resize(context, instance, flavor_id, **kwargs)
         except exception.FlavorNotFound:
             msg = _("Unable to locate requested flavor.")
             raise exc.HTTPBadRequest(explanation=msg)
@@ -971,7 +1007,11 @@ class Controller(wsgi.Controller):
             msg = _("Resize requests require 'flavorRef' attribute.")
             raise exc.HTTPBadRequest(explanation=msg)
 
-        return self._resize(req, id, flavor_ref)
+        kwargs = {}
+        if 'auto_disk_config' in body['resize']:
+            kwargs['auto_disk_config'] = body['resize']['auto_disk_config']
+
+        return self._resize(req, id, flavor_ref, **kwargs)
 
     @wsgi.response(202)
     @wsgi.serializers(xml=FullServerTemplate)
@@ -1006,7 +1046,14 @@ class Controller(wsgi.Controller):
             'accessIPv4': 'access_ip_v4',
             'accessIPv6': 'access_ip_v6',
             'metadata': 'metadata',
+            'auto_disk_config': 'auto_disk_config',
         }
+
+        if 'accessIPv4' in body:
+            self._validate_access_ipv4(body['accessIPv4'])
+
+        if 'accessIPv6' in body:
+            self._validate_access_ipv6(body['accessIPv6'])
 
         kwargs = {}
 

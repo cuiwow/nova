@@ -204,7 +204,7 @@ class AdminRequired(NotAuthorized):
 
 
 class PolicyNotAuthorized(NotAuthorized):
-    message = _("Policy Doesn't allow %(action)s to be performed.")
+    message = _("Policy doesn't allow %(action)s to be performed.")
 
 
 class Invalid(NovaException):
@@ -679,6 +679,10 @@ class ConsoleNotFoundInPoolForInstance(ConsoleNotFound):
                 "in pool %(pool_id)s could not be found.")
 
 
+class ConsoleTypeInvalid(Invalid):
+    message = _("Invalid console type %(console_type)s ")
+
+
 class NoInstanceTypesFound(NotFound):
     message = _("Zero instance types found.")
 
@@ -884,3 +888,28 @@ class WillNotSchedule(NovaException):
 class QuotaError(ApiError):
     """Quota Exceeded."""
     pass
+
+
+class AggregateNotFound(NotFound):
+    message = _("Aggregate %(aggregate_id)s could not be found.")
+
+
+class AggregateNameExists(Duplicate):
+    message = _("Aggregate %(aggregate_name)s already exists.")
+
+
+class AggregateHostNotFound(NotFound):
+    message = _("Aggregate %(aggregate_id)s has no host %(host)s.")
+
+
+class AggregateMetadataNotFound(NotFound):
+    message = _("Aggregate %(aggregate_id)s has no metadata with "
+                "key %(metadata_key)s.")
+
+
+class AggregateHostConflict(Duplicate):
+    message = _("Host %(host)s already member of another aggregate.")
+
+
+class AggregateHostExists(Duplicate):
+    message = _("Aggregate %(aggregate_id)s already has host %(host)s.")

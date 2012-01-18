@@ -1,8 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 
-# Copyright 2011 OpenStack LLC.
-# Copyright 2011 Grid Dynamics
-# Copyright 2011 Eldar Nugaev, Kirill Shileev, Ilya Alekseyev
+# Copyright 2012 OpenStack LLC.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -25,18 +23,23 @@ from nova.api.openstack import extensions
 from nova.api.openstack import wsgi
 
 
-LOG = logging.getLogger('nova.api.openstack.compute.contrib.console_output')
+LOG = logging.getLogger('nova.api.openstack.compute.contrib.console')
 
 
-class ConsoleOutputController(wsgi.Controller):
+class ConsolesController(wsgi.Controller):
     def __init__(self, *args, **kwargs):
-        super(ConsoleOutputController, self).__init__(*args, **kwargs)
         self.compute_api = compute.API()
+        super(ConsolesController, self).__init__(*args, **kwargs)
 
-    @wsgi.action('os-getConsoleOutput')
-    def get_console_output(self, req, id, body):
+    @wsgi.action('os-getVNCConsole')
+    def get_vnc_console(self, req, id, body):
         """Get text console output."""
         context = req.environ['nova.context']
+
+        console_type = body['os-getVNCConsole'].get('type')
+
+        if not console_type:
+            raise webob.exc.HTTPBadRequest(_('Missing type specification'))
 
         try:
             instance = self.compute_api.routing_get(context, id)
@@ -44,32 +47,33 @@ class ConsoleOutputController(wsgi.Controller):
             raise webob.exc.HTTPNotFound(_('Instance not found'))
 
         try:
-            length = body['os-getConsoleOutput'].get('length')
-        except (TypeError, KeyError):
-            raise webob.exc.HTTPBadRequest(_('Malformed request body'))
-
-        try:
-            output = self.compute_api.get_console_output(context,
-                                                         instance,
-                                                         length)
+            output = self.compute_api.get_vnc_console(context,
+                                                      instance,
+                                                      console_type)
+        except exception.ConsoleTypeInvalid, e:
+            raise webob.exc.HTTPBadRequest(_('Invalid type specification'))
         except exception.ApiError, e:
             raise webob.exc.HTTPBadRequest(explanation=e.message)
         except exception.NotAuthorized, e:
             raise webob.exc.HTTPUnauthorized()
 
-        return {'output': output}
+        return {'console': {'type': console_type, 'url': output['url']}}
+
+    def get_actions(self):
+        """Return the actions the extension adds, as required by contract."""
+        actions = [extensions.ActionExtension("servers", "os-getVNCConsole",
+                                              self.get_vnc_console)]
+        return actions
 
 
-class Console_output(extensions.ExtensionDescriptor):
-    """Console log output support, with tailing ability."""
-
-    name = "Console_output"
-    alias = "os-console-output"
-    namespace = "http://docs.openstack.org/compute/ext/" \
-                "os-console-output/api/v2"
-    updated = "2011-12-08T00:00:00+00:00"
+class Consoles(extensions.ExtensionDescriptor):
+    """Interactive Console support."""
+    name = "Consoles"
+    alias = "os-consoles"
+    namespace = "http://docs.openstack.org/compute/ext/os-consoles/api/v2"
+    updated = "2011-12-23T00:00:00+00:00"
 
     def get_controller_extensions(self):
-        controller = ConsoleOutputController()
+        controller = ConsolesController()
         extension = extensions.ControllerExtension(self, 'servers', controller)
         return [extension]
