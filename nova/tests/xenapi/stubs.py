@@ -47,7 +47,7 @@ def stubout_instance_snapshot(stubs):
 
     def fake_wait_for_vhd_coalesce(*args):
         #TODO(sirp): Should we actually fake out the data here
-        return "fakeparent"
+        return "fakeparent", "fakebase"
 
     stubs.Set(vm_utils, '_wait_for_vhd_coalesce', fake_wait_for_vhd_coalesce)
 
@@ -175,9 +175,6 @@ class FakeSessionForVMTests(fake.SessionBase):
 
     def host_call_plugin(self, _1, _2, plugin, method, _5):
         if (plugin, method) == ('glance', 'download_vhd'):
-            return fake.as_json(dict(vdi_type='os',
-                                     vdi_uuid=_make_fake_vdi()))
-        elif (plugin, method) == ('glance', 'snapshot_vhd'):
             return fake.as_json(dict(vdi_type='os',
                                      vdi_uuid=_make_fake_vdi()))
         elif (plugin, method) == ("xenhost", "iptables_config"):

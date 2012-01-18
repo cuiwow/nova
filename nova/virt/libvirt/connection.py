@@ -96,9 +96,6 @@ flags.DEFINE_string('libvirt_uri',
 flags.DEFINE_bool('allow_same_net_traffic',
                   True,
                   'Whether to allow network traffic from same network')
-flags.DEFINE_bool('use_cow_images',
-                  True,
-                  'Whether to use cow images')
 flags.DEFINE_string('ajaxterm_portrange',
                     '10000-12000',
                     'Range of ports that ajaxterm should randomly try to bind')

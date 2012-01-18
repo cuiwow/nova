@@ -42,6 +42,7 @@ from nova.virt import driver
 from nova.virt.xenapi import volume_utils
 from nova.virt.xenapi import network_utils
 from nova.virt.xenapi import vm_utils
+from nova.virt.xenapi.vm_utils import ImageType
 
 VolumeHelper = volume_utils.VolumeHelper
 NetworkHelper = network_utils.NetworkHelper
@@ -175,10 +176,16 @@ class VMOps(object):
 
     def _create_disks(self, context, instance, image_meta):
         disk_image_type = VMHelper.determine_disk_image_type(image_meta)
-        vdis = VMHelper.fetch_image(context, self._session,
+        if disk_image_type == ImageType.DISK_ISO:
+            vdis = VMHelper.fetch_image(context, self._session,
                 instance, instance.image_ref,
                 instance.user_id, instance.project_id,
                 disk_image_type)
+        else:
+            vdis = VMHelper.create_image(context, self._session,
+                instance, instance.image_ref,
+                instance.user_id, instance.project_id,
+                disk_image_type, cow=FLAGS.use_cow_images)
 
         for vdi in vdis:
             if vdi["vdi_type"] == "os":
@@ -260,11 +267,11 @@ class VMOps(object):
         ramdisk = None
         try:
             if instance.kernel_id:
-                kernel = VMHelper.fetch_image(context, self._session,
+                kernel = VMHelper.create_kernel_image(context, self._session,
                         instance, instance.kernel_id, instance.user_id,
                         instance.project_id, vm_utils.ImageType.KERNEL)[0]
             if instance.ramdisk_id:
-                ramdisk = VMHelper.fetch_image(context, self._session,
+                ramdisk = VMHelper.create_kernel_image(context, self._session,
                         instance, instance.ramdisk_id, instance.user_id,
                         instance.project_id, vm_utils.ImageType.RAMDISK)[0]
 
