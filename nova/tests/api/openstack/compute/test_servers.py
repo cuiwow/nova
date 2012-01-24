@@ -150,10 +150,6 @@ def fake_compute_api(cls, req, id):
     return True
 
 
-def find_host(self, context, instance_id):
-    return "nova"
-
-
 class MockSetAdminPassword(object):
     def __init__(self):
         self.instance_id = None
@@ -1394,10 +1390,9 @@ class ServersControllerTest(test.TestCase):
             self.server_delete_called = True
         self.stubs.Set(nova.db, 'instance_destroy', instance_destroy_mock)
 
-        self.assertRaises(webob.exc.HTTPConflict,
-                          self.controller.delete,
-                          req,
-                          FAKE_UUID)
+        self.controller.delete(req, FAKE_UUID)
+
+        self.assertEqual(self.server_delete_called, True)
 
     def test_delete_server_instance_while_resize(self):
         req = fakes.HTTPRequest.blank('/v2/fake/servers/%s' % FAKE_UUID)
@@ -1565,7 +1560,6 @@ class ServersControllerCreateTest(test.TestCase):
         self.stubs.Set(nova.db, 'queue_get_for', queue_get_for)
         self.stubs.Set(nova.network.manager.VlanManager, 'allocate_fixed_ip',
                        fake_method)
-        self.stubs.Set(nova.compute.api.API, "_find_host", find_host)
 
     def _test_create_instance(self):
         image_uuid = 'c905cedb-7281-47e4-8a62-f26bc5fc4c77'

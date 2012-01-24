@@ -408,6 +408,8 @@ def usage_from_instance(instance_ref, network_info=None, **kw):
           instance_id=instance_ref['uuid'],
           instance_type=instance_ref['instance_type']['name'],
           instance_type_id=instance_ref['instance_type_id'],
+          memory_mb=instance_ref['memory_mb'],
+          disk_gb=instance_ref['local_gb'],
           display_name=instance_ref['display_name'],
           created_at=str(instance_ref['created_at']),
           launched_at=str(instance_ref['launched_at']) \
@@ -1399,3 +1401,11 @@ def _showwarning(message, category, filename, lineno, file=None, line=None):
 
 # Install our warnings handler
 warnings.showwarning = _showwarning
+
+
+def service_is_up(service):
+    """Check whether a service is up based on last heartbeat."""
+    last_heartbeat = service['updated_at'] or service['created_at']
+    # Timestamps in DB are UTC.
+    elapsed = total_seconds(utcnow() - last_heartbeat)
+    return abs(elapsed) <= FLAGS.service_down_time

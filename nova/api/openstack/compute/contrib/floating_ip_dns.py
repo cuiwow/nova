@@ -33,12 +33,15 @@ def make_dns_entry(elem):
     elem.set('id')
     elem.set('ip')
     elem.set('type')
-    elem.set('zone')
+    elem.set('domain')
     elem.set('name')
 
 
-def make_zone_entry(elem):
-    elem.set('zone')
+def make_domain_entry(elem):
+    elem.set('domain')
+    elem.set('scope')
+    elem.set('project')
+    elem.set('availability_zone')
 
 
 class FloatingIPDNSTemplate(xmlutil.TemplateBuilder):
@@ -58,12 +61,20 @@ class FloatingIPDNSsTemplate(xmlutil.TemplateBuilder):
         return xmlutil.MasterTemplate(root, 1)
 
 
-class ZonesTemplate(xmlutil.TemplateBuilder):
+class DomainTemplate(xmlutil.TemplateBuilder):
     def construct(self):
-        root = xmlutil.TemplateElement('zones')
-        elem = xmlutil.SubTemplateElement(root, 'zone',
-                                          selector='zones')
-        make_zone_entry(elem)
+        root = xmlutil.TemplateElement('domain_entry',
+                                       selector='domain_entry')
+        make_domain_entry(root)
+        return xmlutil.MasterTemplate(root, 1)
+
+
+class DomainsTemplate(xmlutil.TemplateBuilder):
+    def construct(self):
+        root = xmlutil.TemplateElement('domain_entries')
+        elem = xmlutil.SubTemplateElement(root, 'domain_entry',
+                                          selector='domain_entries')
+        make_domain_entry(elem)
         return xmlutil.MasterTemplate(root, 1)
 
 
@@ -72,7 +83,7 @@ def _translate_dns_entry_view(dns_entry):
     result['ip'] = dns_entry.get('ip')
     result['id'] = dns_entry.get('id')
     result['type'] = dns_entry.get('type')
-    result['zone'] = dns_entry.get('zone')
+    result['domain'] = dns_entry.get('domain')
     result['name'] = dns_entry.get('name')
     return {'dns_entry': result}
 
@@ -82,123 +93,186 @@ def _translate_dns_entries_view(dns_entries):
                             for entry in dns_entries]}
 
 
-def _translate_zone_entries_view(zonelist):
-    return {'zones': [{'zone': zone} for zone in zonelist]}
+def _translate_domain_entry_view(domain_entry):
+    result = {}
+    result['domain'] = domain_entry.get('domain')
+    result['scope'] = domain_entry.get('scope')
+    result['project'] = domain_entry.get('project')
+    result['availability_zone'] = domain_entry.get('availability_zone')
+    return {'domain_entry': result}
 
 
-def _unquote_zone(zone):
-    """Unquoting function for receiving a zone name in a URL.
+def _translate_domain_entries_view(domain_entries):
+    return {'domain_entries':
+            [_translate_domain_entry_view(entry)['domain_entry']
+                             for entry in domain_entries]}
 
-    Zone names tend to have .'s in them.  Urllib doesn't quote dots,
+
+def _unquote_domain(domain):
+    """Unquoting function for receiving a domain name in a URL.
+
+    Domain names tend to have .'s in them.  Urllib doesn't quote dots,
     but Routes tends to choke on them, so we need an extra level of
     by-hand quoting here.
     """
-    return urllib.unquote(zone).replace('%2E', '.')
+    return urllib.unquote(domain).replace('%2E', '.')
 
 
-def _create_dns_entry(ip, name, zone):
-    return {'ip': ip, 'name': name, 'zone': zone}
+def _create_dns_entry(ip, name, domain):
+    return {'ip': ip, 'name': name, 'domain': domain}
 
 
-class FloatingIPDNSController(object):
+def _create_domain_entry(domain, scope=None, project=None, av_zone=None):
+    return {'domain': domain, 'scope': scope, 'project': project,
+            'availability_zone': av_zone}
+
+
+class FloatingIPDNSDomainController(object):
+    """DNS domain controller for OpenStack API"""
+
+    def __init__(self):
+        self.network_api = network.API()
+        super(FloatingIPDNSDomainController, self).__init__()
+
+    @wsgi.serializers(xml=DomainsTemplate)
+    def index(self, req):
+        """Return a list of available DNS domains."""
+        context = req.environ['nova.context']
+        domains = self.network_api.get_dns_domains(context)
+        domainlist = [_create_domain_entry(domain['domain'],
+                                         domain.get('scope'),
+                                         domain.get('project'),
+                                         domain.get('availability_zone'))
+                    for domain in domains]
+
+        return _translate_domain_entries_view(domainlist)
+
+    @wsgi.serializers(xml=DomainTemplate)
+    def update(self, req, id, body):
+        """Add or modify domain entry"""
+        context = req.environ['nova.context']
+        fqdomain = _unquote_domain(id)
+        try:
+            entry = body['domain_entry']
+            scope = entry['scope']
+        except (TypeError, KeyError):
+            raise webob.exc.HTTPUnprocessableEntity()
+        project = entry.get('project', None)
+        av_zone = entry.get('availability_zone', None)
+        if (not scope or
+            project and av_zone or
+            scope == 'private' and project or
+            scope == 'public' and av_zone):
+            raise webob.exc.HTTPUnprocessableEntity()
+        try:
+            if scope == 'private':
+                self.network_api.create_private_dns_domain(context,
+                                                           fqdomain,
+                                                           av_zone)
+                return _translate_domain_entry_view({'domain': fqdomain,
+                                                   'scope': scope,
+                                             'availability_zone': av_zone})
+            else:
+                self.network_api.create_public_dns_domain(context,
+                                                          fqdomain,
+                                                          project)
+                return _translate_domain_entry_view({'domain': fqdomain,
+                                                   'scope': 'public',
+                                                   'project': project})
+        except exception.NotAuthorized or exception.AdminRequired:
+            return webob.Response(status_int=403)
+
+    def delete(self, req, id):
+        """Delete the domain identified by id. """
+        context = req.environ['nova.context']
+        params = req.str_GET
+        domain = _unquote_domain(id)
+
+        # Delete the whole domain
+        try:
+            self.network_api.delete_dns_domain(context, domain)
+        except exception.NotAuthorized or exception.AdminRequired:
+            return webob.Response(status_int=403)
+        except exception.NotFound:
+            return webob.Response(status_int=404)
+
+        return webob.Response(status_int=200)
+
+
+class FloatingIPDNSEntryController(object):
     """DNS Entry controller for OpenStack API"""
 
     def __init__(self):
         self.network_api = network.API()
-        super(FloatingIPDNSController, self).__init__()
+        super(FloatingIPDNSEntryController, self).__init__()
+
+    @wsgi.serializers(xml=FloatingIPDNSTemplate)
+    def show(self, req, domain_id, id):
+        """Return the DNS entry that corresponds to domain_id and id."""
+        context = req.environ['nova.context']
+        domain = _unquote_domain(domain_id)
+        name = id
+
+        entries = self.network_api.get_dns_entries_by_name(context,
+                                                           name, domain)
+        entry = _create_dns_entry(entries[0], name, domain)
+        return _translate_dns_entry_view(entry)
 
     @wsgi.serializers(xml=FloatingIPDNSsTemplate)
-    def show(self, req, id):
-        """Return a list of dns entries.  If ip is specified, query for
-           names.  if name is specified, query for ips.
-           Quoted domain (aka 'zone') specified as id."""
+    def index(self, req, domain_id):
+        """Return a list of dns entries for the specified domain and ip."""
         context = req.environ['nova.context']
         params = req.GET
-        floating_ip = params['ip'] if 'ip' in params else ""
-        name = params['name'] if 'name' in params else ""
-        zone = _unquote_zone(id)
+        floating_ip = params.get('ip')
+        domain = _unquote_domain(domain_id)
 
-        if floating_ip:
-            entries = self.network_api.get_dns_entries_by_address(context,
-                                                                  floating_ip,
-                                                                  zone)
-            entrylist = [_create_dns_entry(floating_ip, entry, zone)
-                         for entry in entries]
-        elif name:
-            entries = self.network_api.get_dns_entries_by_name(context,
-                                                               name, zone)
-            entrylist = [_create_dns_entry(entry, name, zone)
-                         for entry in entries]
-        else:
-            entrylist = []
+        if not floating_ip:
+            raise webob.exc.HTTPUnprocessableEntity()
+
+        entries = self.network_api.get_dns_entries_by_address(context,
+                                                              floating_ip,
+                                                              domain)
+        entrylist = [_create_dns_entry(floating_ip, entry, domain)
+                     for entry in entries]
 
         return _translate_dns_entries_view(entrylist)
 
-    @wsgi.serializers(xml=ZonesTemplate)
-    def index(self, req):
-        """Return a list of available DNS zones."""
-
-        context = req.environ['nova.context']
-        zones = self.network_api.get_dns_zones(context)
-
-        return _translate_zone_entries_view(zones)
-
     @wsgi.serializers(xml=FloatingIPDNSTemplate)
-    def create(self, req, body):
-        """Add dns entry for name and address"""
+    def update(self, req, domain_id, id, body):
+        """Add or modify dns entry"""
         context = req.environ['nova.context']
-
+        domain = _unquote_domain(domain_id)
+        name = id
         try:
             entry = body['dns_entry']
             address = entry['ip']
-            name = entry['name']
             dns_type = entry['dns_type']
-            zone = entry['zone']
         except (TypeError, KeyError):
             raise webob.exc.HTTPUnprocessableEntity()
 
-        try:
+        entries = self.network_api.get_dns_entries_by_name(context,
+                                                           name, domain)
+        if not entries:
+            # create!
             self.network_api.add_dns_entry(context, address, name,
-                                           dns_type, zone)
-        except exception.FloatingIpDNSExists:
-            return webob.Response(status_int=409)
+                                           dns_type, domain)
+        else:
+            # modify!
+            self.network_api.modify_dns_entry(context, name, address, domain)
 
         return _translate_dns_entry_view({'ip': address,
                                           'name': name,
                                           'type': dns_type,
-                                          'zone': zone})
+                                          'domain': domain})
 
-    def update(self, req, id, body):
-        """Modify a dns entry."""
-        context = req.environ['nova.context']
-        zone = _unquote_zone(id)
-
-        try:
-            entry = body['dns_entry']
-            name = entry['name']
-            new_ip = entry['ip']
-        except (TypeError, KeyError):
-            raise webob.exc.HTTPUnprocessableEntity()
-
-        try:
-            self.network_api.modify_dns_entry(context, name,
-                                              new_ip, zone)
-        except exception.NotFound:
-            return webob.Response(status_int=404)
-
-        return _translate_dns_entry_view({'ip': new_ip,
-                                          'name': name,
-                                          'zone': zone})
-
-    def delete(self, req, id):
+    def delete(self, req, domain_id, id):
         """Delete the entry identified by req and id. """
         context = req.environ['nova.context']
-        params = req.GET
-        name = params['name'] if 'name' in params else ""
-        zone = _unquote_zone(id)
+        domain = _unquote_domain(domain_id)
+        name = id
 
         try:
-            self.network_api.delete_dns_entry(context, name, zone)
+            self.network_api.delete_dns_entry(context, name, domain)
         except exception.NotFound:
             return webob.Response(status_int=404)
 
@@ -221,7 +295,13 @@ class Floating_ip_dns(extensions.ExtensionDescriptor):
         resources = []
 
         res = extensions.ResourceExtension('os-floating-ip-dns',
-                         FloatingIPDNSController())
+                         FloatingIPDNSDomainController())
+        resources.append(res)
+
+        res = extensions.ResourceExtension('entries',
+                         FloatingIPDNSEntryController(),
+                         parent={'member_name': 'domain',
+                                 'collection_name': 'os-floating-ip-dns'})
         resources.append(res)
 
         return resources

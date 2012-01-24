@@ -370,14 +370,11 @@ DEFINE_string('console_manager', 'nova.console.manager.ConsoleProxyManager',
 DEFINE_string('instance_dns_manager',
               'nova.network.dns_driver.DNSDriver',
               'DNS Manager for instance IPs')
-DEFINE_string('instance_dns_zone', '',
+DEFINE_string('instance_dns_domain', '',
               'DNS Zone for instance IPs')
 DEFINE_string('floating_ip_dns_manager',
               'nova.network.dns_driver.DNSDriver',
               'DNS Manager for floating IPs')
-DEFINE_multistring('floating_ip_dns_zones', '',
-                   'DNS zones for floating IPs.'
-                   'e.g. "example.org"')
 DEFINE_string('network_manager', 'nova.network.manager.VlanManager',
               'Manager for network')
 DEFINE_string('volume_manager', 'nova.volume.manager.VolumeManager',
@@ -469,3 +466,9 @@ DEFINE_integer('zombie_instance_updated_at_window', 172800,
 DEFINE_boolean('allow_ec2_admin_api', False, 'Enable/Disable EC2 Admin API')
 
 DEFINE_bool('use_cow_images', True, 'Whether to use cow images')
+DEFINE_integer('service_down_time', 60,
+        'maximum time since last check-in for up service')
+DEFINE_string('default_schedule_zone', None,
+              'zone to use when user doesnt specify one')
+DEFINE_list('isolated_images', [], 'Images to run on isolated host')
+DEFINE_list('isolated_hosts', [], 'Host reserved for specific images')

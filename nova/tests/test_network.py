@@ -128,6 +128,7 @@ class FlatNetworkTestCase(test.TestCase):
         self.network = network_manager.FlatManager(host=HOST)
         temp = utils.import_object('nova.network.minidns.MiniDNS')
         self.network.instance_dns_manager = temp
+        self.network.instance_dns_domain = ''
         self.network.db = db
         self.context = context.RequestContext('testuser', 'testproject',
                                               is_admin=False)
@@ -277,6 +278,8 @@ class FlatNetworkTestCase(test.TestCase):
         db.instance_get(self.context,
                         1).AndReturn({'display_name': HOST,
                                       'uuid': 'test-00001'})
+        db.instance_get(mox.IgnoreArg(),
+                        mox.IgnoreArg()).AndReturn({'availability_zone': ''})
         db.fixed_ip_associate_pool(mox.IgnoreArg(),
                                    mox.IgnoreArg(),
                                    mox.IgnoreArg()).AndReturn('192.168.0.101')
@@ -343,6 +346,8 @@ class FlatNetworkTestCase(test.TestCase):
         db.instance_get(self.context,
                         1).AndReturn({'display_name': HOST,
                                       'uuid': 'test-00001'})
+        db.instance_get(mox.IgnoreArg(),
+                        mox.IgnoreArg()).AndReturn({'availability_zone': ''})
         db.fixed_ip_associate_pool(mox.IgnoreArg(),
                                    mox.IgnoreArg(),
                                    mox.IgnoreArg()).AndReturn(fixedip)
@@ -354,10 +359,12 @@ class FlatNetworkTestCase(test.TestCase):
         self.network.add_fixed_ip_to_instance(self.context, 1, HOST,
                                               networks[0]['id'])
         instance_manager = self.network.instance_dns_manager
-        addresses = instance_manager.get_entries_by_name(HOST)
+        addresses = instance_manager.get_entries_by_name(HOST,
+                                             self.network.instance_dns_domain)
         self.assertEqual(len(addresses), 1)
         self.assertEqual(addresses[0], fixedip)
-        addresses = instance_manager.get_entries_by_name('test-00001')
+        addresses = instance_manager.get_entries_by_name('test-00001',
+                                              self.network.instance_dns_domain)
         self.assertEqual(len(addresses), 1)
         self.assertEqual(addresses[0], fixedip)
 
@@ -750,7 +757,8 @@ class VlanNetworkTestCase(test.TestCase):
 
         db.instance_get(mox.IgnoreArg(),
                         mox.IgnoreArg()).AndReturn({'security_groups':
-                                                             [{'id': 0}]})
+                                                             [{'id': 0}],
+                                                    'availability_zone': ''})
         db.fixed_ip_associate_pool(mox.IgnoreArg(),
                                    mox.IgnoreArg(),
                                    mox.IgnoreArg()).AndReturn('192.168.0.101')
@@ -1264,16 +1272,6 @@ class FloatingIPTestCase(test.TestCase):
         self.network.deallocate_for_instance(self.context,
                 instance_id=instance_ref['id'])
 
-    def test_floating_dns_zones(self):
-        zone1 = "example.org"
-        zone2 = "example.com"
-        flags.FLAGS.floating_ip_dns_zones = [zone1, zone2]
-
-        zones = self.network.get_dns_zones(self.context)
-        self.assertEqual(len(zones), 2)
-        self.assertEqual(zones[0], zone1)
-        self.assertEqual(zones[1], zone2)
-
     def test_floating_dns_create_conflict(self):
         zone = "example.org"
         address1 = "10.10.10.11"
@@ -1327,6 +1325,93 @@ class FloatingIPTestCase(test.TestCase):
                           self.network.delete_dns_entry, self.context,
                           name1, zone)
 
+    def test_floating_dns_domains_public(self):
+        zone1 = "testzone"
+        domain1 = "example.org"
+        domain2 = "example.com"
+        address1 = '10.10.10.10'
+        entryname = 'testentry'
+
+        context_admin = context.RequestContext('testuser', 'testproject',
+                                               is_admin=True)
+
+        self.assertRaises(exception.AdminRequired,
+                          self.network.create_public_dns_domain, self.context,
+                          domain1, zone1)
+        self.network.create_public_dns_domain(context_admin, domain1,
+                                              'testproject')
+        self.network.create_public_dns_domain(context_admin, domain2,
+                                              'fakeproject')
+
+        domains = self.network.get_dns_domains(self.context)
+        self.assertEquals(len(domains), 2)
+        self.assertEquals(domains[0]['domain'], domain1)
+        self.assertEquals(domains[1]['domain'], domain2)
+        self.assertEquals(domains[0]['project'], 'testproject')
+        self.assertEquals(domains[1]['project'], 'fakeproject')
+
+        self.network.add_dns_entry(self.context, address1, entryname,
+                                   'A', domain1)
+        entries = self.network.get_dns_entries_by_name(self.context,
+                                                       entryname, domain1)
+        self.assertEquals(len(entries), 1)
+        self.assertEquals(entries[0], address1)
+
+        self.assertRaises(exception.AdminRequired,
+                          self.network.delete_dns_domain, self.context,
+                          domain1)
+        self.network.delete_dns_domain(context_admin, domain1)
+        self.network.delete_dns_domain(context_admin, domain2)
+
+        # Verify that deleting the domain deleted the associated entry
+        entries = self.network.get_dns_entries_by_name(self.context,
+                                                       entryname, domain1)
+        self.assertFalse(entries)
+
+    def test_delete_all_by_ip(self):
+        domain1 = "example.org"
+        domain2 = "example.com"
+        address = "10.10.10.10"
+        name1 = "foo"
+        name2 = "bar"
+
+        def fake_domains(context):
+            return [{'domain': 'example.org', 'scope': 'public'},
+                    {'domain': 'example.com', 'scope': 'public'},
+                    {'domain': 'test.example.org', 'scope': 'public'}]
+
+        self.stubs.Set(self.network, 'get_dns_domains', fake_domains)
+
+        context_admin = context.RequestContext('testuser', 'testproject',
+                                              is_admin=True)
+
+        self.network.create_public_dns_domain(context_admin, domain1,
+                                              'testproject')
+        self.network.create_public_dns_domain(context_admin, domain2,
+                                              'fakeproject')
+
+        domains = self.network.get_dns_domains(self.context)
+        for domain in domains:
+            self.network.add_dns_entry(self.context, address,
+                                       name1, "A", domain['domain'])
+            self.network.add_dns_entry(self.context, address,
+                                       name2, "A", domain['domain'])
+            entries = self.network.get_dns_entries_by_address(self.context,
+                                                              address,
+                                                              domain['domain'])
+            self.assertEquals(len(entries), 2)
+
+        self.network._delete_all_entries_for_ip(self.context, address)
+
+        for domain in domains:
+            entries = self.network.get_dns_entries_by_address(self.context,
+                                                              address,
+                                                              domain['domain'])
+            self.assertFalse(entries)
+
+        self.network.delete_dns_domain(context_admin, domain1)
+        self.network.delete_dns_domain(context_admin, domain2)
+
 
 class NetworkPolicyTestCase(test.TestCase):
     def setUp(self):
@@ -1355,3 +1440,118 @@ class NetworkPolicyTestCase(test.TestCase):
         network_manager.check_policy(self.context, 'get_all')
         self.mox.UnsetStubs()
         self.mox.VerifyAll()
+
+
+class InstanceDNSTestCase(test.TestCase):
+    """Tests nova.network.manager instance DNS"""
+    def setUp(self):
+        super(InstanceDNSTestCase, self).setUp()
+        self.network = TestFloatingIPManager()
+        temp = utils.import_object('nova.network.minidns.MiniDNS')
+        self.network.instance_dns_manager = temp
+        temp = utils.import_object('nova.network.dns_driver.DNSDriver')
+        self.network.floating_dns_manager = temp
+        self.network.db = db
+        self.project_id = 'testproject'
+        self.context = context.RequestContext('testuser', self.project_id,
+            is_admin=False)
+
+    def tearDown(self):
+        super(InstanceDNSTestCase, self).tearDown()
+        self.network.instance_dns_manager.delete_dns_file()
+
+    def test_dns_domains_private(self):
+        zone1 = 'testzone'
+        domain1 = 'example.org'
+
+        context_admin = context.RequestContext('testuser', 'testproject',
+                                              is_admin=True)
+
+        self.assertRaises(exception.AdminRequired,
+                          self.network.create_private_dns_domain, self.context,
+                          domain1, zone1)
+
+        self.network.create_private_dns_domain(context_admin, domain1, zone1)
+        domains = self.network.get_dns_domains(self.context)
+        self.assertEquals(len(domains), 1)
+        self.assertEquals(domains[0]['domain'], domain1)
+        self.assertEquals(domains[0]['availability_zone'], zone1)
+
+        self.assertRaises(exception.AdminRequired,
+                          self.network.delete_dns_domain, self.context,
+                          domain1)
+        self.network.delete_dns_domain(context_admin, domain1)
+
+
+domain1 = "example.org"
+domain2 = "example.com"
+
+
+class LdapDNSTestCase(test.TestCase):
+    """Tests nova.network.ldapdns.LdapDNS"""
+    def setUp(self):
+        super(LdapDNSTestCase, self).setUp()
+        temp = utils.import_object('nova.network.ldapdns.FakeLdapDNS')
+        self.driver = temp
+        self.driver.create_domain(domain1)
+        self.driver.create_domain(domain2)
+
+    def tearDown(self):
+        super(LdapDNSTestCase, self).tearDown()
+        self.driver.delete_domain(domain1)
+        self.driver.delete_domain(domain2)
+
+    def test_ldap_dns_domains(self):
+        domains = self.driver.get_domains()
+        self.assertEqual(len(domains), 2)
+        self.assertIn(domain1, domains)
+        self.assertIn(domain2, domains)
+
+    def test_ldap_dns_create_conflict(self):
+        address1 = "10.10.10.11"
+        name1 = "foo"
+        name2 = "bar"
+
+        self.driver.create_entry(name1, address1, "A", domain1)
+
+        self.assertRaises(exception.FloatingIpDNSExists,
+                          self.driver.create_entry,
+                          name1, address1, "A", domain1)
+
+    def test_ldap_dns_create_and_get(self):
+        address1 = "10.10.10.11"
+        name1 = "foo"
+        name2 = "bar"
+        entries = self.driver.get_entries_by_address(address1, domain1)
+        self.assertFalse(entries)
+
+        self.driver.create_entry(name1, address1, "A", domain1)
+        self.driver.create_entry(name2, address1, "A", domain1)
+        entries = self.driver.get_entries_by_address(address1, domain1)
+        self.assertEquals(len(entries), 2)
+        self.assertEquals(entries[0], name1)
+        self.assertEquals(entries[1], name2)
+
+        entries = self.driver.get_entries_by_name(name1, domain1)
+        self.assertEquals(len(entries), 1)
+        self.assertEquals(entries[0], address1)
+
+    def test_ldap_dns_delete(self):
+        address1 = "10.10.10.11"
+        name1 = "foo"
+        name2 = "bar"
+
+        self.driver.create_entry(name1, address1, "A", domain1)
+        self.driver.create_entry(name2, address1, "A", domain1)
+        entries = self.driver.get_entries_by_address(address1, domain1)
+        self.assertEquals(len(entries), 2)
+
+        self.driver.delete_entry(name1, domain1)
+        entries = self.driver.get_entries_by_address(address1, domain1)
+        LOG.debug("entries: %s" % entries)
+        self.assertEquals(len(entries), 1)
+        self.assertEquals(entries[0], name2)
+
+        self.assertRaises(exception.NotFound,
+                          self.driver.delete_entry,
+                          name1, domain1)

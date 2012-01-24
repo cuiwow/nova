@@ -17,7 +17,7 @@
 Module dedicated functions/classes dealing with rate limiting requests.
 """
 
-from collections import defaultdict
+import collections
 import copy
 import httplib
 import json
@@ -25,7 +25,7 @@ import math
 import re
 import time
 
-from webob.dec import wsgify
+import webob.dec
 import webob.exc
 
 from nova.api.openstack.compute.views import limits as limits_views
@@ -240,7 +240,7 @@ class RateLimitingMiddleware(base_wsgi.Middleware):
 
         self._limiter = limiter(limits or DEFAULT_LIMITS, **kwargs)
 
-    @wsgify(RequestClass=wsgi.Request)
+    @webob.dec.wsgify(RequestClass=wsgi.Request)
     def __call__(self, req):
         """
         Represents a single call through this middleware. We should record the
@@ -283,7 +283,7 @@ class Limiter(object):
         @param limits: List of `Limit` objects
         """
         self.limits = copy.deepcopy(limits)
-        self.levels = defaultdict(lambda: copy.deepcopy(limits))
+        self.levels = collections.defaultdict(lambda: copy.deepcopy(limits))
 
         # Pick up any per-user limit information
         for key, value in kwargs.items():
@@ -401,7 +401,7 @@ class WsgiLimiter(object):
         """
         self._limiter = Limiter(limits or DEFAULT_LIMITS)
 
-    @wsgify(RequestClass=wsgi.Request)
+    @webob.dec.wsgify(RequestClass=wsgi.Request)
     def __call__(self, request):
         """
         Handles a call to this application. Returns 204 if the request is

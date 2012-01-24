@@ -187,11 +187,30 @@ def compute_node_update(context, compute_id, values):
     """Set the given properties on an computeNode and update it.
 
     Raises NotFound if computeNode does not exist.
-
     """
-
     return IMPL.compute_node_update(context, compute_id, values)
 
+
+def compute_node_get_by_host(context, host):
+    return IMPL.compute_node_get_by_host(context, host)
+
+
+def compute_node_capacity_find(context, minimum_ram_mb, minimum_disk_gb):
+    return IMPL.compute_node_capacity_find(context, minimum_ram_mb,
+                                           minimum_disk_gb)
+
+
+def compute_node_utilization_update(context, host, free_ram_mb_delta=0,
+                          free_disk_gb_delta=0, work_delta=0, vm_delta=0):
+    return IMPL.compute_node_utilization_update(context, host,
+                          free_ram_mb_delta, free_disk_gb_delta, work_delta,
+                          vm_delta)
+
+
+def compute_node_utilization_set(context, host, free_ram_mb=None,
+                                 free_disk_gb=None, work=None, vms=None):
+    return IMPL.compute_node_utilization_set(context, host, free_ram_mb,
+                                             free_disk_gb, work, vms)
 
 ###################
 
@@ -290,6 +309,11 @@ def floating_ip_fixed_ip_associate(context, floating_address,
                                                host)
 
 
+def floating_ip_get_all(context):
+    """Get all floating ips."""
+    return IMPL.floating_ip_get_all(context)
+
+
 def floating_ip_get_all_by_host(context, host):
     """Get all floating ips by host."""
     return IMPL.floating_ip_get_all_by_host(context, host)
@@ -323,6 +347,32 @@ def floating_ip_update(context, address, values):
 def floating_ip_set_auto_assigned(context, address):
     """Set auto_assigned flag to floating ip"""
     return IMPL.floating_ip_set_auto_assigned(context, address)
+
+
+def dnsdomain_list(context):
+    """Get a list of all zones in our database, public and private."""
+    return IMPL.dnsdomain_list(context)
+
+
+def dnsdomain_register_for_zone(context, fqdomain, zone):
+    """Associated a DNS domain with an availability zone"""
+    return IMPL.dnsdomain_register_for_zone(context, fqdomain, zone)
+
+
+def dnsdomain_register_for_project(context, fqdomain, project):
+    """Associated a DNS domain with a project id"""
+    return IMPL.dnsdomain_register_for_project(context, fqdomain, project)
+
+
+def dnsdomain_unregister(context, fqdomain):
+    """Purge associations for the specified DNS zone"""
+    return IMPL.dnsdomain_unregister(context, fqdomain)
+
+
+def dnsdomain_get(context, fqdomain):
+    """Get the db record for the specified domain."""
+    return IMPL.dnsdomain_get(context, fqdomain)
+
 
 ####################
 

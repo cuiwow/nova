@@ -136,6 +136,16 @@ class ComputeNode(BASE, NovaBase):
     hypervisor_type = Column(Text)
     hypervisor_version = Column(Integer)
 
+    # Free Ram, amount of activity (resize, migration, boot, etc) and
+    # the number of running VM's are a good starting point for what's
+    # important when making scheduling decisions.
+    #
+    # NOTE(sandy): We'll need to make this extensible for other schedulers.
+    free_ram_mb = Column(Integer)
+    free_disk_gb = Column(Integer)
+    current_workload = Column(Integer)
+    running_vms = Column(Integer)
+
     # Note(masumotok): Expected Strings example:
     #
     # '{"arch":"x86_64",
@@ -747,6 +757,19 @@ class Project(BASE, NovaBase):
     members = relationship(User,
                            secondary='user_project_association',
                            backref='projects')
+
+
+class DNSDomain(BASE, NovaBase):
+    """Represents a DNS domain with availability zone or project info."""
+    __tablename__ = 'dns_domains'
+    domain = Column(String(512), primary_key=True)
+    scope = Column(String(255))
+    availability_zone = Column(String(255))
+    project_id = Column(String(255))
+    project = relationship(Project,
+                           primaryjoin=project_id == Project.id,
+                           foreign_keys=[Project.id],
+                           uselist=False)
 
 
 class UserProjectRoleAssociation(BASE, NovaBase):

@@ -51,6 +51,7 @@ XenAPI = None
 LOG = logging.getLogger("nova.virt.xenapi.vmops")
 
 FLAGS = flags.FLAGS
+flags.DECLARE('vncserver_proxyclient_address', 'nova.vnc')
 flags.DEFINE_integer('agent_version_timeout', 300,
                      'number of seconds to wait for agent to be fully '
                      'operational')
@@ -60,9 +61,6 @@ flags.DEFINE_integer('xenapi_running_timeout', 60,
 flags.DEFINE_string('xenapi_vif_driver',
                     'nova.virt.xenapi.vif.XenAPIBridgeDriver',
                     'The XenAPI VIF driver using XenServer Network APIs.')
-flags.DEFINE_string('dom0_address',
-                    '169.254.0.1',
-                    'Ip address of dom0.  Override for multi-host vnc.')
 flags.DEFINE_bool('xenapi_generate_swap',
                   False,
                   'Whether to generate swap (False means fetching it'
@@ -241,7 +239,7 @@ class VMOps(object):
 
         except (self.XenAPI.Failure, OSError, IOError) as spawn_error:
             LOG.exception(_("instance %s: Failed to spawn"),
-                          instance.id, exc_info=sys.exc_info())
+                          instance.uuid, exc_info=sys.exc_info())
             LOG.debug(_('Instance %s failed to spawn - performing clean-up'),
                       instance.id)
             self._handle_spawn_error(vdis, spawn_error)
@@ -939,8 +937,9 @@ class VMOps(object):
         resp = self._make_agent_call('key_init', instance, '', key_init_args)
         # Successful return code from key_init is 'D0'
         if resp['returncode'] != 'D0':
-            LOG.error(_('Failed to exchange keys: %(resp)r') % locals())
-            return None
+            msg = _('Failed to exchange keys: %(resp)r') % locals()
+            LOG.error(msg)
+            raise Exception(msg)
         # Some old versions of the Windows agent have a trailing \\r\\n
         # (ie CRLF escaped) for some reason. Strip that off.
         agent_pub = int(resp['message'].replace('\\r\\n', ''))
@@ -954,8 +953,9 @@ class VMOps(object):
         resp = self._make_agent_call('password', instance, '', password_args)
         # Successful return code from password is '0'
         if resp['returncode'] != '0':
-            LOG.error(_('Failed to update password: %(resp)r') % locals())
-            return None
+            msg = _('Failed to update password: %(resp)r') % locals()
+            LOG.error(msg)
+            raise Exception(msg)
         return resp['message']
 
     def inject_file(self, instance, path, contents):
@@ -1009,11 +1009,19 @@ class VMOps(object):
             LOG.exception(exc)
 
     def _find_rescue_vbd_ref(self, vm_ref, rescue_vm_ref):
-        """Find and return the rescue VM's vbd_ref.
+        """Find and return the rescue VM's vbd_ref."""
+        vbd_refs = self._session.call_xenapi("VM.get_VBDs", vm_ref)
 
-        We use the second VBD here because swap is first with the root file
-        system coming in second."""
-        vbd_ref = self._session.call_xenapi("VM.get_VBDs", vm_ref)[1]
+        if len(vbd_refs) == 0:
+            raise Exception(_("Unable to find VBD for VM"))
+        elif len(vbd_refs) == 1:
+            # If we only have one VBD, assume it's the root fs
+            vbd_ref = vbd_refs[0]
+        else:
+            # If we have more than one VBD, swap will be first by convention
+            # with the root fs coming second
+            vbd_ref = vbd_refs[1]
+
         vdi_ref = self._session.call_xenapi("VBD.get_record", vbd_ref)["VDI"]
 
         return VolumeHelper.create_vbd(self._session, rescue_vm_ref, vdi_ref,
@@ -1399,7 +1407,7 @@ class VMOps(object):
                    % (str(vm_ref), session_id)
 
         # NOTE: XS5.6sp2+ use http over port 80 for xenapi com
-        return {'host': FLAGS.dom0_address, 'port': 80,
+        return {'host': FLAGS.vncserver_proxyclient_address, 'port': 80,
                 'internal_access_path': path}
 
     def host_power_action(self, host, action):
