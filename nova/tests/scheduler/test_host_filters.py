@@ -18,6 +18,7 @@ Tests For Scheduler Host Filters.
 import json
 
 from nova import context
+from nova import flags
 from nova.scheduler import filters
 from nova import test
 from nova.tests.scheduler import fakes
@@ -29,6 +30,7 @@ class HostFiltersTestCase(test.TestCase):
 
     def setUp(self):
         super(HostFiltersTestCase, self).setUp()
+        self.context = context.RequestContext('fake', 'fake')
         self.json_query = json.dumps(
                 ['and', ['>=', '$free_ram_mb', 1024],
                         ['>=', '$free_disk_mb', 200 * 1024]])
@@ -42,6 +44,88 @@ class HostFiltersTestCase(test.TestCase):
         def fake_service_is_up(service):
             return ret_value
         self.stubs.Set(utils, 'service_is_up', fake_service_is_up)
+
+    def test_affinity_different_filter_passes(self):
+        filt_cls = filters.DifferentHostFilter()
+        host = fakes.FakeHostState('host1', 'compute', {})
+        instance = fakes.FakeInstance(context=self.context,
+                                         params={'host': 'host2'})
+        instance_uuid = instance.uuid
+
+        filter_properties = {'context': self.context.elevated(),
+                             'scheduler_hints': {
+                                'different_host': [instance_uuid], }}
+
+        self.assertTrue(filt_cls.host_passes(host, filter_properties))
+
+    def test_affinity_different_filter_fails(self):
+        filt_cls = filters.DifferentHostFilter()
+        host = fakes.FakeHostState('host1', 'compute', {})
+        instance = fakes.FakeInstance(context=self.context,
+                                         params={'host': 'host1'})
+        instance_uuid = instance.uuid
+
+        filter_properties = {'context': self.context.elevated(),
+                             'scheduler_hints': {
+                                'different_host': [instance_uuid], }}
+
+        self.assertFalse(filt_cls.host_passes(host, filter_properties))
+
+    def test_affinity_same_filter_passes(self):
+        filt_cls = filters.SameHostFilter()
+        host = fakes.FakeHostState('host1', 'compute', {})
+        instance = fakes.FakeInstance(context=self.context,
+                                         params={'host': 'host1'})
+        instance_uuid = instance.uuid
+
+        filter_properties = {'context': self.context.elevated(),
+                             'scheduler_hints': {
+                                'same_host': [instance_uuid], }}
+
+        self.assertTrue(filt_cls.host_passes(host, filter_properties))
+
+    def test_affinity_same_filter_fails(self):
+        filt_cls = filters.SameHostFilter()
+        host = fakes.FakeHostState('host1', 'compute', {})
+        instance = fakes.FakeInstance(context=self.context,
+                                         params={'host': 'host2'})
+        instance_uuid = instance.uuid
+
+        filter_properties = {'context': self.context.elevated(),
+                             'scheduler_hints': {
+                                'same_host': [instance_uuid], }}
+
+        self.assertFalse(filt_cls.host_passes(host, filter_properties))
+
+    def test_affinity_simple_cidr_filter_passes(self):
+        filt_cls = filters.SimpleCIDRAffinityFilter()
+        host = fakes.FakeHostState('host1', 'compute', {})
+
+        affinity_ip = flags.FLAGS.my_ip.split('.')[0:3]
+        affinity_ip.append('100')
+        affinity_ip = str.join('.', affinity_ip)
+
+        filter_properties = {'context': self.context.elevated(),
+                             'scheduler_hints': {
+                                 'cidr': '/24',
+                                 'build_near_host_ip': affinity_ip}}
+
+        self.assertTrue(filt_cls.host_passes(host, filter_properties))
+
+    def test_affinity_simple_cidr_filter_fails(self):
+        filt_cls = filters.SimpleCIDRAffinityFilter()
+        host = fakes.FakeHostState('host1', 'compute', {})
+
+        affinity_ip = flags.FLAGS.my_ip.split('.')
+        affinity_ip[-1] = '100' if affinity_ip[-1] != '100' else '101'
+        affinity_ip = str.join('.', affinity_ip)
+
+        filter_properties = {'context': self.context.elevated(),
+                             'scheduler_hints': {
+                                 'cidr': '/32',
+                                 'build_near_host_ip': affinity_ip}}
+
+        self.assertFalse(filt_cls.host_passes(host, filter_properties))
 
     def test_compute_filter_passes(self):
         self._stub_service_is_up(True)
@@ -183,7 +267,8 @@ class HostFiltersTestCase(test.TestCase):
     def test_json_filter_passes(self):
         filt_cls = filters.JsonFilter()
         filter_properties = {'instance_type': {'memory_mb': 1024,
-                                               'local_gb': 200},
+                                               'root_gb': 200,
+                                               'ephemeral_gb': 0},
                              'query': self.json_query}
         capabilities = {'enabled': True}
         host = fakes.FakeHostState('host1', 'compute',
@@ -195,7 +280,8 @@ class HostFiltersTestCase(test.TestCase):
     def test_json_filter_passes_with_no_query(self):
         filt_cls = filters.JsonFilter()
         filter_properties = {'instance_type': {'memory_mb': 1024,
-                                               'local_gb': 200}}
+                                               'root_gb': 200,
+                                               'ephemeral_gb': 0}}
         capabilities = {'enabled': True}
         host = fakes.FakeHostState('host1', 'compute',
                 {'free_ram_mb': 0,
@@ -206,7 +292,8 @@ class HostFiltersTestCase(test.TestCase):
     def test_json_filter_fails_on_memory(self):
         filt_cls = filters.JsonFilter()
         filter_properties = {'instance_type': {'memory_mb': 1024,
-                                               'local_gb': 200},
+                                               'root_gb': 200,
+                                               'ephemeral_gb': 0},
                              'query': self.json_query}
         capabilities = {'enabled': True}
         host = fakes.FakeHostState('host1', 'compute',
@@ -218,7 +305,8 @@ class HostFiltersTestCase(test.TestCase):
     def test_json_filter_fails_on_disk(self):
         filt_cls = filters.JsonFilter()
         filter_properties = {'instance_type': {'memory_mb': 1024,
-                                               'local_gb': 200},
+                                               'root_gb': 200,
+                                               'ephemeral_gb': 0},
                              'query': self.json_query}
         capabilities = {'enabled': True}
         host = fakes.FakeHostState('host1', 'compute',
@@ -234,7 +322,8 @@ class HostFiltersTestCase(test.TestCase):
                         ['>=', '$free_disk_mb', 200 * 1024],
                         '$capabilities.enabled'])
         filter_properties = {'instance_type': {'memory_mb': 1024,
-                                               'local_gb': 200},
+                                               'root_gb': 200,
+                                               'ephemeral_gb': 0},
                              'query': json_query}
         capabilities = {'enabled': False}
         host = fakes.FakeHostState('host1', 'compute',

@@ -179,6 +179,10 @@ class NovaException(Exception):
         super(NovaException, self).__init__(message)
 
 
+class DecryptionFailure(NovaException):
+    message = _("Failed to decrypt text")
+
+
 class ImagePaginationFailed(NovaException):
     message = _("Failed to paginate through images from image service")
 
@@ -245,6 +249,10 @@ class InvalidContentType(Invalid):
 
 class InvalidCidr(Invalid):
     message = _("Invalid cidr %(cidr)s.")
+
+
+class InvalidRPCConnectionReuse(Invalid):
+    message = _("Invalid reuse of an RPC connection.")
 
 
 # Cannot be templated as the error syntax varies.
@@ -582,6 +590,10 @@ class FloatingIpNotAssociated(NovaException):
 
 class NoFloatingIpsDefined(NotFound):
     message = _("Zero floating ips exist.")
+
+
+class NoFloatingIpInterface(NotFound):
+    message = _("Interface %(interface)s not found.")
 
 
 class KeypairNotFound(NotFound):

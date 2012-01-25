@@ -52,7 +52,7 @@ flags.DEFINE_bool('quantum_use_port_security', False,
                   'Whether or not to enable port security')
 
 
-class QuantumManager(manager.FlatManager):
+class QuantumManager(manager.FloatingIP, manager.FlatManager):
     """NetworkManager class that communicates with a Quantum service
        via a web services API to provision VM network connectivity.
 
@@ -90,6 +90,10 @@ class QuantumManager(manager.FlatManager):
         # Initialize forwarding rules for anything specified in
         # FLAGS.fixed_range()
         self.driver.init_host()
+        # Initialize floating ip support (only works for nova ipam currently)
+        if FLAGS.quantum_ipam_lib == 'nova.network.quantum.nova_ipam_lib':
+            LOG.debug("Initializing FloatingIP support")
+            self.init_host_floating_ips()
         # Set up all the forwarding rules for any network that has a
         # gateway set.
         networks = self.get_all_networks()
@@ -132,9 +136,55 @@ class QuantumManager(manager.FlatManager):
 
            In both cases, we initialize a subnet using the IPAM lib.
         """
+        # Enforce Configuration sanity.
+        #
+        # These flags are passed in from bin/nova-manage. The script
+        # collects the arguments and then passes them in through this
+        # function call. Note that in some cases, the script pre-processes
+        # the arguments, and sets them to a default value if a parameter's
+        # value was not specified on the command line. For pre-processed
+        # parameters, the most effective check to see if the user passed it
+        # in is to see if is different from the default value. (This
+        # does miss the use case where the user passes in the default value
+        # on the command line -- but it is unavoidable.)
+        if multi_host != FLAGS.multi_host:
+            # User specified it on the command line.
+            raise Exception(_("QuantumManager does not use 'multi_host'"
+                              " parameter."))
+
         if num_networks != 1:
             raise Exception(_("QuantumManager requires that only one"
                               " network is created per call"))
+
+        if network_size != int(FLAGS.network_size):
+            # User specified it on the command line.
+            LOG.warning("Ignoring unnecessary parameter 'network_size'")
+
+        if kwargs.get('vlan_start', None):
+            if kwargs['vlan_start'] != int(FLAGS.vlan_start):
+                # User specified it on the command line.
+                LOG.warning(_("QuantumManager does not use 'vlan_start'"
+                              " parameter."))
+
+        if kwargs.get('vpn_start', None):
+            if kwargs['vpn_start'] != int(FLAGS.vpn_start):
+                # User specified it on the command line.
+                LOG.warning(_("QuantumManager does not use 'vpn_start'"
+                              " parameter."))
+
+        if bridge is not None and len(bridge) > 0:
+            LOG.warning(_("QuantumManager does not use 'bridge'"
+                          " parameter."))
+
+        if bridge_interface is not None and len(bridge_interface) > 0:
+            LOG.warning(_("QuantumManager does not use 'bridge_interface'"
+                          " parameter."))
+
+        if gateway is not None and len(gateway) > 0:
+            if gateway.split('.')[3] != '1':
+                raise Exception(_("QuantumManager requires a valid (.1)"
+                              " gateway address."))
+
         q_tenant_id = kwargs["project_id"] or FLAGS.quantum_default_tenant_id
         quantum_net_id = uuid
         # If a uuid was specified with the network it should have already been

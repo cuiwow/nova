@@ -193,6 +193,48 @@ def model_query(context, *args, **kwargs):
     return query
 
 
+def exact_filter(query, model, filters, legal_keys):
+    """Applies exact match filtering to a query.
+
+    Returns the updated query.  Modifies filters argument to remove
+    filters consumed.
+
+    :param query: query to apply filters to
+    :param model: model object the query applies to, for IN-style
+                  filtering
+    :param filters: dictionary of filters; values that are lists,
+                    tuples, sets, or frozensets cause an 'IN' test to
+                    be performed, while exact matching ('==' operator)
+                    is used for other values
+    :param legal_keys: list of keys to apply exact filtering to
+    """
+
+    filter_dict = {}
+
+    # Walk through all the keys
+    for key in legal_keys:
+        # Skip ones we're not filtering on
+        if key not in filters:
+            continue
+
+        # OK, filtering on this key; what value do we search for?
+        value = filters.pop(key)
+
+        if isinstance(value, (list, tuple, set, frozenset)):
+            # Looking for values in a list; apply to query directly
+            column_attr = getattr(model, key)
+            query = query.filter(column_attr.in_(value))
+        else:
+            # OK, simple exact match; save for later
+            filter_dict[key] = value
+
+    # Apply simple exact matches
+    if filter_dict:
+        query = query.filter_by(**filter_dict)
+
+    return query
+
+
 ###################
 
 
@@ -906,9 +948,9 @@ def dnsdomain_register_for_project(context, fqdomain, project):
 def dnsdomain_unregister(context, fqdomain):
     session = get_session()
     with session.begin():
-        domain_ref = _dnsdomain_get(context, session, fqdomain)
-        if domain_ref:
-            domain_ref.delete(session=session)
+        session.query(models.DNSDomain).\
+                     filter_by(domain=fqdomain).\
+                     delete()
 
 
 @require_context
@@ -1465,18 +1507,6 @@ def instance_get_all_by_filters(context, filters):
             return True
         return False
 
-    def _exact_match_filter(query, column, value):
-        """Do exact match against a column.  value to match can be a list
-        so you can match any value in the list.
-        """
-        if isinstance(value, list) or isinstance(value, set):
-            column_attr = getattr(models.Instance, column)
-            return query.filter(column_attr.in_(value))
-        else:
-            filter_dict = {}
-            filter_dict[column] = value
-            return query.filter_by(**filter_dict)
-
     session = get_session()
     query_prefix = session.query(models.Instance).\
             options(joinedload('info_cache')).\
@@ -1518,14 +1548,9 @@ def instance_get_all_by_filters(context, filters):
     exact_match_filter_names = ['project_id', 'user_id', 'image_ref',
             'vm_state', 'instance_type_id', 'uuid']
 
-    query_filters = [key for key in filters.iterkeys()
-            if key in exact_match_filter_names]
-
-    for filter_name in query_filters:
-        # Do the matching and remove the filter from the dictionary
-        # so we don't try it again below..
-        query_prefix = _exact_match_filter(query_prefix, filter_name,
-                filters.pop(filter_name))
+    # Filter the query
+    query_prefix = exact_filter(query_prefix, models.Instance,
+                                filters, exact_match_filter_names)
 
     instances = query_prefix.all()
     if not instances:
@@ -1556,36 +1581,36 @@ def instance_get_all_by_filters(context, filters):
 
 @require_context
 def instance_get_active_by_window(context, begin, end=None, project_id=None):
-    """Return instances that were continuously active over window."""
+    """Return instances that were active during window."""
     session = get_session()
-    query = session.query(models.Instance).\
-                    filter(models.Instance.launched_at < begin)
+    query = session.query(models.Instance)
+
+    query = query.filter(or_(models.Instance.terminated_at == None,
+                             models.Instance.terminated_at > begin))
     if end:
-        query = query.filter(or_(models.Instance.terminated_at == None,
-                                 models.Instance.terminated_at > end))
-    else:
-        query = query.filter(models.Instance.terminated_at == None)
+        query = query.filter(models.Instance.launched_at < end)
     if project_id:
         query = query.filter_by(project_id=project_id)
+
     return query.all()
 
 
 @require_admin_context
 def instance_get_active_by_window_joined(context, begin, end=None,
                                          project_id=None):
-    """Return instances and joins that were continuously active over window."""
+    """Return instances and joins that were active during window."""
     session = get_session()
-    query = session.query(models.Instance).\
-                    options(joinedload('security_groups')).\
-                    options(joinedload('instance_type')).\
-                    filter(models.Instance.launched_at < begin)
+    query = session.query(models.Instance)
+
+    query = query.options(joinedload('security_groups')).\
+                  options(joinedload('instance_type')).\
+                  filter(or_(models.Instance.terminated_at == None,
+                             models.Instance.terminated_at > begin))
     if end:
-        query = query.filter(or_(models.Instance.terminated_at == None,
-                                 models.Instance.terminated_at > end))
-    else:
-        query = query.filter(models.Instance.terminated_at == None)
+        query = query.filter(models.Instance.launched_at < end)
     if project_id:
         query = query.filter_by(project_id=project_id)
+
     return query.all()
 
 
@@ -3340,13 +3365,13 @@ def instance_type_create(context, values):
         instance_type_ref.save()
     except Exception, e:
         raise exception.DBError(e)
-    return instance_type_ref
+    return _dict_with_extra_specs(instance_type_ref)
 
 
 def _dict_with_extra_specs(inst_type_query):
-    """Takes an instance OR volume type query returned by sqlalchemy
-    and returns it as a dictionary, converting the extra_specs
-    entry from a list of dicts:
+    """Takes an instance, volume, or instance type query returned
+    by sqlalchemy and returns it as a dictionary, converting the
+    extra_specs entry from a list of dicts:
 
     'extra_specs' : [{'key': 'k1', 'value': 'v1', ...}, ...]
 
@@ -3380,9 +3405,9 @@ def instance_type_get_all(context, inactive=False, filters=None):
     if 'min_memory_mb' in filters:
         query = query.filter(
                 models.InstanceTypes.memory_mb >= filters['min_memory_mb'])
-    if 'min_local_gb' in filters:
+    if 'min_root_gb' in filters:
         query = query.filter(
-                models.InstanceTypes.local_gb >= filters['min_local_gb'])
+                models.InstanceTypes.root_gb >= filters['min_root_gb'])
 
     inst_types = query.order_by("name").all()
 
@@ -3651,6 +3676,29 @@ def bw_usage_get_by_instance(context, instance_id, start_period):
                    filter_by(instance_id=instance_id).\
                    filter_by(start_period=start_period).\
                    all()
+
+
+@require_context
+def bw_usage_get_all_by_filters(context, filters):
+    """Return bandwidth usage that matches all filters."""
+
+    session = get_session()
+    query_prefix = session.query(models.BandwidthUsage).\
+            order_by(desc(models.BandwidthUsage.created_at))
+
+    # Make a copy of the filters dictionary to use going forward, as we'll
+    # be modifying it and we shouldn't affect the caller's use of it.
+    filters = filters.copy()
+
+    # Filters for exact matches that we can do along with the SQL query.
+    exact_match_filter_names = ["instance_id", "network_label",
+            "start_period", "last_refreshed", "bw_in", "bw_out"]
+
+    # Filter the query
+    query_prefix = exact_filter(query_prefix, models.BandwidthUsage,
+                                filters, exact_match_filter_names)
+
+    return query_prefix.all()
 
 
 @require_context

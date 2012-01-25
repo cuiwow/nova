@@ -70,13 +70,18 @@ Network Management
 
 * network modify: Associate/disassociate network with project and/or host.
 
-  * :option:`--fixed_range=\<IP range\>` - Specify the network to modify by IP range.  Required.
-  * :option:`--project=\<project name\>` - Project name to associate.  Optional.
+  * :option:`--fixed_range=\<IP range\>` - Specify the network to modify by
+    IP range.  Required.
+  * :option:`--project=\<project name\>` - Project name to associate.
+    Optional.
   * :option:`--host=\<host\>` - Host to associate.  Optional.
-  * :option:`--disassociate-project` - Disassociate network from project.  Optional, mutually exclusive with :option:`--project`.
-  * :option:`--disassociate-host` - Disassociate host from project.  Optional, mutually exclusive with :option:`--host`.
+  * :option:`--disassociate-project` - Disassociate network from project.
+    Optional, mutually exclusive with :option:`--project`.
+  * :option:`--disassociate-host` - Disassociate host from project.
+    Optional, mutually exclusive with :option:`--host`.
 
-* network delete: Deletes a network.  Precisely one of :option:`--fixed_range` or :option:`--uuid` must be specified.
+* network delete: Deletes a network.  Precisely one of :option:`--fixed_range`
+  or :option:`--uuid` must be specified.
 
   * :option:`--fixed_range=\<IP range\>` - Specify the network by range.
   * :option:`--uuid=\<UUID\>` - Specify the network by UUID.

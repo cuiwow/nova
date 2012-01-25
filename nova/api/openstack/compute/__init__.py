@@ -42,9 +42,6 @@ from nova import wsgi as base_wsgi
 
 LOG = logging.getLogger('nova.api.openstack.compute')
 FLAGS = flags.FLAGS
-flags.DEFINE_bool('allow_admin_api',
-    False,
-    'When True, this API service will accept admin operations.')
 flags.DEFINE_bool('allow_instance_snapshots',
     True,
     'When True, this API service will permit instance snapshot operations.')
@@ -77,9 +74,7 @@ class APIRouter(base_wsgi.Router):
             LOG.debug(_('Extended resource: %s'),
                       resource.collection)
 
-            wsgi_resource = wsgi.Resource(
-                resource.controller, resource.deserializer,
-                resource.serializer)
+            wsgi_resource = wsgi.Resource(resource.controller)
             self.resources[resource.collection] = wsgi_resource
             kargs = dict(
                 controller=wsgi_resource,

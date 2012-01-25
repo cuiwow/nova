@@ -34,7 +34,8 @@ FLAGS = flags.FLAGS
 SERVERS = 5
 TENANTS = 2
 HOURS = 24
-LOCAL_GB = 10
+ROOT_GB = 10
+EPHEMERAL_GB = 20
 MEMORY_MB = 1024
 VCPUS = 2
 STOP = datetime.datetime.utcnow()
@@ -44,7 +45,8 @@ START = STOP - datetime.timedelta(hours=HOURS)
 def fake_instance_type_get(self, context, instance_type_id):
     return {'id': 1,
             'vcpus': VCPUS,
-            'local_gb': LOCAL_GB,
+            'root_gb': ROOT_GB,
+            'ephemeral_gb': EPHEMERAL_GB,
             'memory_mb': MEMORY_MB,
             'name':
             'fakeflavor'}
@@ -86,7 +88,6 @@ class SimpleTenantUsageTest(test.TestCase):
         self.alt_user_context = context.RequestContext('fakeadmin_0',
                                                       'faketenant_1',
                                                        is_admin=False)
-        FLAGS.allow_admin_api = True
 
     def test_verify_index(self):
         req = webob.Request.blank(
@@ -107,7 +108,7 @@ class SimpleTenantUsageTest(test.TestCase):
             self.assertEqual(int(usages[i]['total_hours']),
                              SERVERS * HOURS)
             self.assertEqual(int(usages[i]['total_local_gb_usage']),
-                             SERVERS * LOCAL_GB * HOURS)
+                             SERVERS * (ROOT_GB + EPHEMERAL_GB) * HOURS)
             self.assertEqual(int(usages[i]['total_memory_mb_usage']),
                              SERVERS * MEMORY_MB * HOURS)
             self.assertEqual(int(usages[i]['total_vcpus_usage']),

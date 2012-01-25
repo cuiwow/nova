@@ -261,7 +261,7 @@ DEFINE_string('my_ip', _get_my_ip(), 'host ip address')
 DEFINE_list('region_list',
             [],
             'list of region=fqdn pairs separated by commas')
-DEFINE_string('connection_type', 'libvirt', 'libvirt, xenapi or fake')
+DEFINE_string('connection_type', None, 'libvirt, xenapi or fake')
 DEFINE_string('aws_access_key_id', 'admin', 'AWS Access ID')
 DEFINE_string('aws_secret_access_key', 'admin', 'AWS Access Key')
 # NOTE(sirp): my_ip interpolation doesn't work within nested structures
@@ -275,6 +275,7 @@ DEFINE_integer('glance_num_retries', 0,
 DEFINE_integer('s3_port', 3333, 's3 port')
 DEFINE_string('s3_host', '$my_ip', 's3 host (for infrastructure)')
 DEFINE_string('s3_dmz', '$my_ip', 's3 dmz ip (for instances)')
+DEFINE_string('cert_topic', 'cert', 'the topic cert nodes listen on')
 DEFINE_string('compute_topic', 'compute', 'the topic compute nodes listen on')
 DEFINE_string('console_topic', 'console',
               'the topic console proxy nodes listen on')
@@ -367,6 +368,8 @@ DEFINE_string('compute_manager', 'nova.compute.manager.ComputeManager',
               'Manager for compute')
 DEFINE_string('console_manager', 'nova.console.manager.ConsoleProxyManager',
               'Manager for console proxy')
+DEFINE_string('cert_manager', 'nova.cert.manager.CertManager',
+              'Manager for cert')
 DEFINE_string('instance_dns_manager',
               'nova.network.dns_driver.DNSDriver',
               'DNS Manager for instance IPs')
@@ -428,6 +431,10 @@ DEFINE_bool('start_guests_on_host_boot', False,
             'Whether to restart guests when the host reboots')
 DEFINE_bool('resume_guests_state_on_host_boot', False,
             'Whether to start guests, that was running before the host reboot')
+DEFINE_string('default_ephemeral_format',
+              None,
+              'The default format a ephemeral_volume will be formatted '
+              'with on creation.')
 
 DEFINE_string('root_helper', 'sudo',
               'Command prefix to use for running commands as root')
