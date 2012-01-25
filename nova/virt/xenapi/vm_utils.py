@@ -58,6 +58,15 @@ xenapi_vm_utils_opts = [
     cfg.IntOpt('max_kernel_ramdisk_size',
                default=16 * 1024 * 1024,
                help='maximum size in bytes of kernel or ramdisk images'),
+    cfg.StrOpt('sr_matching_filter',
+               default='other-config:i18n-key=local-storage',
+               help='Filter for finding the SR to be used to install guest '
+                    'instances on. The default value is the Local Storage in '
+                    'default XenServer/XCP installations. To select an SR '
+                    'with a different matching criteria, you could set it to '
+                    'other-config:my_favorite_sr=true. On the other hand, to '
+                    'fall back on the Default SR, as displayed by XenCenter, '
+                    'set this flag to: default-sr:true'),
     ]
 
 FLAGS = flags.FLAGS
@@ -1097,7 +1106,7 @@ class VMHelper(HelperBase):
             return None
 
         if filter_criteria == 'other-config':
-            key, _sep, value = filter_pattern.partition('=')
+            key, value = filter_pattern.split('=', 1)
             for sr_ref, sr_rec in cls.get_all_refs_and_recs(session, 'SR'):
                 if not (key in sr_rec['other_config'] and
                         sr_rec['other_config'][key] == value):
