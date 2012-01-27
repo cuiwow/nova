@@ -153,6 +153,8 @@ class ExtensionControllerTest(ExtensionTestCase):
         self.ext_list = [
             "Accounts",
             "AdminActions",
+            "Aggregates",
+            "Certificates",
             "Cloudpipe",
             "Console_output",
             "Consoles",
@@ -176,6 +178,7 @@ class ExtensionControllerTest(ExtensionTestCase):
             "SecurityGroups",
             "ServerActionList",
             "ServerDiagnostics",
+            "ServerStartStop",
             "SimpleTenantUsage",
             "Users",
             "VSAs",

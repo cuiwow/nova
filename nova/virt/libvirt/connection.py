@@ -1134,6 +1134,7 @@ class LibvirtConnection(driver.ComputeDriver):
 
         xml_info = {'type': FLAGS.libvirt_type,
                     'name': instance['name'],
+                    'uuid': instance['uuid'],
                     'basepath': os.path.join(FLAGS.instances_path,
                                              instance['name']),
                     'memory_kb': inst_type['memory_mb'] * 1024,
@@ -1540,8 +1541,8 @@ class LibvirtConnection(driver.ComputeDriver):
     def update_available_resource(self, ctxt, host):
         """Updates compute manager resource info on ComputeNode table.
 
-        This method is called when nova-coompute launches, and
-        whenever admin executes "nova-manage service update_resource".
+        This method is called as an periodic tasks and is used only
+        in live migration currently.
 
         :param ctxt: security context
         :param host: hostname that compute manager is currently running

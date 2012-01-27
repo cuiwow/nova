@@ -337,18 +337,6 @@ class XMLDictSerializer(DictSerializer):
         return etree.tostring(root, encoding='UTF-8', xml_declaration=True)
 
 
-@utils.deprecated("The lazy serialization middleware is no longer necessary.")
-class LazySerializationMiddleware(wsgi.Middleware):
-    """Lazy serialization middleware.
-
-    Provided only for backwards compatibility with existing
-    api-paste.ini files.  This middleware will be removed in future
-    versions of nova.
-    """
-
-    pass
-
-
 def serializers(**serializers):
     """Attaches serializers to a method.
 
@@ -573,7 +561,7 @@ class ResourceExceptionHandler(object):
 
         if isinstance(ex_value, exception.NotAuthorized):
             msg = unicode(ex_value)
-            raise Fault(webob.exc.HTTPUnauthorized(explanation=msg))
+            raise Fault(webob.exc.HTTPForbidden(explanation=msg))
         elif isinstance(ex_value, TypeError):
             LOG.exception(ex_value)
             raise Fault(webob.exc.HTTPBadRequest())

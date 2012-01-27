@@ -412,11 +412,8 @@ class Scheduler(object):
         # Getting total used memory and disk of host
         # It should be sum of memories that are assigned as max value,
         # because overcommiting is risky.
-        used = 0
         instance_refs = db.instance_get_all_by_host(context, dest)
-        used_list = [i['memory_mb'] for i in instance_refs]
-        if used_list:
-            used = reduce(lambda x, y: x + y, used_list)
+        used = sum([i['memory_mb'] for i in instance_refs])
 
         mem_inst = instance_ref['memory_mb']
         avail = avail - used
@@ -448,11 +445,6 @@ class Scheduler(object):
         # if real disk size < available disk size
         # if disk_over_commit is True,
         #  otherwise virtual disk size < available disk size.
-
-        # Refresh compute_nodes table
-        topic = db.queue_get_for(context, FLAGS.compute_topic, dest)
-        rpc.call(context, topic,
-                 {"method": "update_available_resource"})
 
         # Getting total available disk of host
         available_gb = self._get_compute_info(context,

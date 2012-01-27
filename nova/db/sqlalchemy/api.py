@@ -472,7 +472,8 @@ def _get_host_utilization(context, host, ram_mb, disk_gb):
     work = 0
     for instance in instances:
         free_ram_mb -= instance.memory_mb
-        free_disk_gb -= instance.local_gb
+        free_disk_gb -= instance.root_gb
+        free_disk_gb -= instance.ephemeral_gb
         if instance.vm_state in [vm_states.BUILDING, vm_states.REBUILDING,
                                  vm_states.MIGRATING, vm_states.RESIZING]:
             work += 1
@@ -4260,7 +4261,7 @@ def aggregate_create(context, values, metadata=None):
     try:
         aggregate = models.Aggregate()
         aggregate.update(values)
-        aggregate.operational_state = aggregate_states.BUILDING
+        aggregate.operational_state = aggregate_states.CREATED
         aggregate.save()
     except exception.DBError:
         raise exception.AggregateNameExists(aggregate_name=values['name'])
@@ -4438,20 +4439,27 @@ def aggregate_host_delete(context, aggregate_id, host):
 @require_admin_context
 @require_aggregate_exists
 def aggregate_host_add(context, aggregate_id, host):
+    session = get_session()
     host_ref = _aggregate_get_query(context,
                                     models.AggregateHost,
                                     models.AggregateHost.aggregate_id,
                                     aggregate_id,
-                                    read_deleted='no').\
+                                    session=session,
+                                    read_deleted='yes').\
                                     filter_by(host=host).first()
     if not host_ref:
         try:
             host_ref = models.AggregateHost()
             values = {"host": host, "aggregate_id": aggregate_id, }
             host_ref.update(values)
-            host_ref.save()
+            host_ref.save(session=session)
         except exception.DBError:
             raise exception.AggregateHostConflict(host=host)
+    elif host_ref.deleted:
+        host_ref.update({'deleted': False,
+                         'deleted_at': None,
+                         'updated_at': literal_column('updated_at')})
+        host_ref.save(session=session)
     else:
         raise exception.AggregateHostExists(host=host,
                                             aggregate_id=aggregate_id)

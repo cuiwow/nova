@@ -174,18 +174,6 @@ class ExtensionsResource(wsgi.Resource):
         raise webob.exc.HTTPNotFound()
 
 
-@utils.deprecated("The extension middleware is no longer necessary.")
-class ExtensionMiddleware(base_wsgi.Middleware):
-    """Extensions middleware for WSGI.
-
-    Provided only for backwards compatibility with existing
-    api-paste.ini files.  This middleware will be removed in future
-    versions of nova.
-    """
-
-    pass
-
-
 class ExtensionManager(object):
     """Load extensions from the configured extension path.
 
@@ -379,9 +367,11 @@ def load_standard_extensions(ext_mgr, logger, path, package):
 
 
 def extension_authorizer(api_name, extension_name):
-    def authorize(context):
+    def authorize(context, target=None):
+        if target == None:
+            target = {}
         action = '%s_extension:%s' % (api_name, extension_name)
-        nova.policy.enforce(context, action, {})
+        nova.policy.enforce(context, action, target)
     return authorize
 
 
