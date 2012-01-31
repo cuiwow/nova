@@ -1636,7 +1636,7 @@ class API(base.Base):
         self.scheduler_rpcapi.live_migration(context,
                 block_migration,
                 disk_over_commit,
-                instance["id"],
+                instance['uuid'],
                 host,
                 topic=FLAGS.compute_topic)
 

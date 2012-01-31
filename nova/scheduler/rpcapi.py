@@ -62,12 +62,13 @@ class SchedulerAPI(nova.openstack.common.rpc.proxy.RpcProxy):
         return self.call(ctxt, self.make_msg('show_host_resources', host=host))
 
     def live_migration(self, ctxt, block_migration, disk_over_commit,
-            instance_id, dest, topic):
+            instance_uuid, dest, topic):
         # NOTE(comstud): Call vs cast so we can get exceptions back, otherwise
         # this call in the scheduler driver doesn't return anything.
         return self.call(ctxt, self.make_msg('live_migration',
                 block_migration=block_migration,
-                disk_over_commit=disk_over_commit, instance_id=instance_id,
+                disk_over_commit=disk_over_commit,
+                instance_uuid=instance_uuid,
                 dest=dest, topic=topic))
 
     def update_service_capabilities(self, ctxt, service_name, host,
