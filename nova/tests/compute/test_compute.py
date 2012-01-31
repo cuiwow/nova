@@ -44,9 +44,9 @@ from nova import log as logging
 from nova.notifier import test_notifier
 from nova.openstack.common import importutils
 from nova.openstack.common import policy as common_policy
-from nova.openstack.common import timeutils
 from nova.openstack.common import rpc
 from nova.openstack.common.rpc import common as rpc_common
+from nova.openstack.common import timeutils
 import nova.policy
 from nova import quota
 from nova.scheduler import driver as scheduler_driver
@@ -1378,19 +1378,37 @@ class ComputeTestCase(BaseTestCase):
         self.assertEqual(inst_ref['vm_state'], vm_states.ERROR)
         self.compute.terminate_instance(context, inst_ref['uuid'])
 
+    def test_check_can_live_migrate_works_correctly(self):
+        """Confirm check_can_live_migrate works on positive path"""
+        context = self.context.elevated()
+        inst_ref = self._create_fake_instance({'host': 'fake_host_2'})
+        inst_id = inst_ref["uuid"]
+        dest = "fake_host_1"
+
+        self.mox.StubOutWithMock(self.compute.driver, 'check_can_live_migrate')
+        self.mox.StubOutWithMock(self.compute.db, 'instance_get')
+
+        self.compute.db.instance_get(context, inst_id).AndReturn(inst_ref)
+        self.compute.driver.check_can_live_migrate(context, inst_ref, dest,
+                                                   True, False)
+
+        self.mox.ReplayAll()
+        self.compute.check_can_live_migrate(context, inst_id,
+                                            dest, True, False)
+
     def test_pre_live_migration_instance_has_no_fixed_ip(self):
         """Confirm raising exception if instance doesn't have fixed_ip."""
         # creating instance testdata
-        inst_ref = self._create_fake_instance({'host': 'dummy'})
-        c = context.get_admin_context()
+        context = self.context.elevated()
+        inst_ref = self._create_fake_instance()
+        inst_id = inst_ref["uuid"]
 
-        # start test
-        self.stubs.Set(time, 'sleep', lambda t: None)
+        self.mox.StubOutWithMock(self.compute.db, 'instance_get')
+        self.compute.db.instance_get(context, inst_id).AndReturn(inst_ref)
+
+        self.mox.ReplayAll()
         self.assertRaises(exception.FixedIpNotFoundForInstance,
-                          self.compute.pre_live_migration,
-                          c, inst_ref['id'])
-        # cleanup
-        db.instance_destroy(c, inst_ref['uuid'])
+                          self.compute.pre_live_migration, context, inst_id)
 
     def test_pre_live_migration_works_correctly(self):
         """Confirm setup_compute_volume is called when volume is mounted."""
@@ -1402,13 +1420,13 @@ class ComputeTestCase(BaseTestCase):
         # creating instance testdata
         inst_ref = self._create_fake_instance({'host': 'dummy'})
         c = context.get_admin_context()
+        nw_info = fake_network.fake_get_instance_nw_info(self.stubs)
 
         # creating mocks
         self.mox.StubOutWithMock(self.compute.driver, 'pre_live_migration')
-        self.compute.driver.pre_live_migration({'block_device_mapping': []})
-        nw_info = fake_network.fake_get_instance_nw_info(self.stubs)
-        self.mox.StubOutWithMock(self.compute.driver, 'plug_vifs')
-        self.compute.driver.plug_vifs(mox.IsA(inst_ref), nw_info)
+        self.compute.driver.pre_live_migration(mox.IsA(c), mox.IsA(inst_ref),
+                                               {'block_device_mapping': []},
+                                               mox.IgnoreArg())
         self.mox.StubOutWithMock(self.compute.driver,
                                  'ensure_filtering_rules_for_instance')
         self.compute.driver.ensure_filtering_rules_for_instance(

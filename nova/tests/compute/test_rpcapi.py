@@ -111,6 +111,11 @@ class ComputeRpcAPITestCase(test.TestCase):
         self._test_compute_api('attach_volume', 'cast',
                 instance=self.fake_instance, volume_id='id', mountpoint='mp')
 
+    def test_check_can_live_migrate(self):
+        self._test_compute_api('check_can_live_migrate', 'call',
+                instance=self.fake_instance, destination='dest',
+                block_migration=True, disk_over_commit=True)
+
     def test_check_shared_storage_test_file(self):
         self._test_compute_api('check_shared_storage_test_file', 'call',
                 filename='fn', host='host')
