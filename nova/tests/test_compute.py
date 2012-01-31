@@ -1265,20 +1265,6 @@ class ComputeTestCase(BaseTestCase):
         self.network_manager = utils.import_object(FLAGS.network_manager)
         self.compute_driver = utils.import_object(FLAGS.compute_driver)
 
-    def test_pre_live_migration_instance_has_no_fixed_ip(self):
-        """Confirm raising exception if instance doesn't have fixed_ip."""
-        # creating instance testdata
-        inst_ref = self._create_fake_instance({'host': 'dummy'})
-        c = context.get_admin_context()
-        topic = db.queue_get_for(c, FLAGS.compute_topic, inst_ref['host'])
-
-        # start test
-        self.assertRaises(exception.FixedIpNotFoundForInstance,
-                          self.compute.pre_live_migration,
-                          c, inst_ref['id'], time=FakeTime())
-        # cleanup
-        db.instance_destroy(c, inst_ref['id'])
-
     def test_pre_live_migration_works_correctly(self):
         """Confirm setup_compute_volume is called when volume is mounted."""
         fake_network.stub_out_nw_api_get_instance_nw_info(self.stubs,
@@ -1293,13 +1279,13 @@ class ComputeTestCase(BaseTestCase):
         inst_ref = self._create_fake_instance({'host': 'dummy'})
         c = context.get_admin_context()
         topic = db.queue_get_for(c, FLAGS.compute_topic, inst_ref['host'])
+        nw_info = fake_network.fake_get_instance_nw_info(self.stubs)
 
         # creating mocks
         self.mox.StubOutWithMock(self.compute.driver, 'pre_live_migration')
-        self.compute.driver.pre_live_migration({'block_device_mapping': []})
-        nw_info = fake_network.fake_get_instance_nw_info(self.stubs)
-        self.mox.StubOutWithMock(self.compute.driver, 'plug_vifs')
-        self.compute.driver.plug_vifs(mox.IsA(inst_ref), nw_info)
+        self.compute.driver.pre_live_migration(mox.IsA(c), mox.IsA(inst_ref),
+                                               {'block_device_mapping': []},
+                                               mox.IgnoreArg())
         self.mox.StubOutWithMock(self.compute.driver,
                                  'ensure_filtering_rules_for_instance')
         self.compute.driver.ensure_filtering_rules_for_instance(

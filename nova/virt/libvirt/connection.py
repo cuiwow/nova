@@ -46,6 +46,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 import uuid
 
 from eventlet import greenthread
@@ -56,6 +57,7 @@ from nova.auth import manager
 from nova import block_device
 from nova.compute import instance_types
 from nova.compute import power_state
+from nova.compute import utils as compute_utils
 from nova import context as nova_context
 from nova import db
 from nova import exception
@@ -1776,13 +1778,14 @@ class LibvirtConnection(driver.ComputeDriver):
         timer.f = wait_for_live_migration
         timer.start(interval=0.5, now=True)
 
-    def pre_live_migration(self, block_device_info):
-        """Preparation live migration.
-
-        :params block_device_info:
-            It must be the result of _get_instance_volume_bdms()
-            at compute manager.
-        """
+    def pre_live_migration(self, context, instance_ref, block_device_info,
+                           network_info):
+        """Preparation live migration."""
+        # TODO(tr3buchet): figure out how on the earth this is necessary
+        fixed_ips = network_info.fixed_ips()
+        if not fixed_ips:
+            raise exception.FixedIpNotFoundForInstance(
+                                                   instance_id=instance_ref.id)
 
         # Establishing connection to volume server.
         block_device_mapping = driver.block_device_info_get_mapping(
@@ -1793,6 +1796,23 @@ class LibvirtConnection(driver.ComputeDriver):
             xml = self.volume_driver_method('connect_volume',
                                             connection_info,
                                             mountpoint)
+
+        # Retry operation is necessary because continuously request comes,
+        # concorrent request occurs to iptables, then it complains.
+        max_retry = FLAGS.live_migration_retry_count
+        for cnt in range(max_retry):
+            try:
+                self.plug_vifs(instance_ref,
+                               compute_utils.legacy_network_info(network_info))
+                break
+            except exception.ProcessExecutionError:
+                if cnt == max_retry - 1:
+                    raise
+                else:
+                    LOG.warn(_("plug_vifs() failed %(cnt)d."
+                               "Retry up to %(max_retry)d for %(hostname)s.")
+                               % locals())
+                    time.sleep(1)
 
     def pre_block_migration(self, ctxt, instance_ref, disk_info_json):
         """Preparation block migration.

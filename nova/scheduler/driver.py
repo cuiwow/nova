@@ -45,6 +45,10 @@ scheduler_driver_opts = [
     cfg.StrOpt('scheduler_zone_manager',
                default='nova.scheduler.zone_manager.ZoneManager',
                help='The scheduler zone manager class to use'),
+    cfg.BoolOpt('scheduler_live_migration_skip_shared_storage_check',
+                default=False,
+                help='Optionally check the storage is shared before '
+                'starting to live migrate')
     ]
 
 FLAGS = flags.FLAGS
@@ -225,10 +229,10 @@ class Scheduler(object):
         self._live_migration_dest_check(context, instance_ref,
                                         dest, block_migration,
                                         disk_over_commit)
-        # Common checking.
-        self._live_migration_common_check(context, instance_ref,
-                                          dest, block_migration,
-                                          disk_over_commit)
+
+        # Compare hosts.
+        self._live_migration_common_check(context, instance_ref, dest,
+                                          block_migration, disk_over_commit)
 
         # Changing instance_state.
         values = {"vm_state": vm_states.MIGRATING}
@@ -310,21 +314,21 @@ class Scheduler(object):
                                                       block_migration,
                                                       disk_over_commit)
 
-    def _live_migration_common_check(self, context, instance_ref, dest,
-                                     block_migration, disk_over_commit):
-        """Live migration common check routine.
-
-        Below checkings are followed by
-        http://wiki.libvirt.org/page/TodoPreMigrationChecks
+    def _live_migration_storage_check(self, context, instance_ref, dest,
+                                      block_migration):
+        """Live migration common storage check.
 
         :param context: security context
         :param instance_ref: nova.db.sqlalchemy.models.Instance object
         :param dest: destination host
         :param block_migration: if true, block_migration.
-        :param disk_over_commit: if True, consider real(not virtual)
-                                 disk size.
-
         """
+
+        # TODO(JohnGarbutt) need to remove this flag and
+        # most of the live_migration checks into the virt layer,
+        # possibly by renaming and expanding compare_cpu
+        if FLAGS.scheduler_live_migration_skip_shared_storage_check:
+            return
 
         # Checking shared storage connectivity
         # if block migration, instances_paths should not be on shared storage.
@@ -343,6 +347,21 @@ class Scheduler(object):
                                 "same shared storage between %(src)s "
                                 "and %(dest)s.") % locals())
                 raise
+
+    def _live_migration_common_check(self, context, instance_ref, dest,
+                                     block_migration, disk_over_commit):
+        """Live migration common check routine.
+
+        Below checkings are followed by
+        http://wiki.libvirt.org/page/TodoPreMigrationChecks
+
+        :param context: security context
+        :param instance_ref: nova.db.sqlalchemy.models.Instance object
+        :param dest: destination host
+        """
+        # check the storage is shared
+        self._live_migration_storage_check(context, instance_ref, dest,
+                                           block_migration)
 
         # Checking destination host exists.
         dservice_refs = db.service_get_all_compute_by_host(context, dest)

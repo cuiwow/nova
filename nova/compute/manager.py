@@ -1783,36 +1783,18 @@ class ComputeManager(manager.SchedulerDependentManager):
         if not block_device_info['block_device_mapping']:
             LOG.info(_("%s has no volume."), instance_ref['uuid'])
 
-        self.driver.pre_live_migration(block_device_info)
-
         # Bridge settings.
         # Call this method prior to ensure_filtering_rules_for_instance,
         # since bridge is not set up, ensure_filtering_rules_for instance
         # fails.
-        #
+        network_info = self._get_instance_nw_info(context, instance_ref)
+
+        self.driver.pre_live_migration(context, instance_ref,
+                                       block_device_info, network_info)
+
         # Retry operation is necessary because continuously request comes,
         # concorrent request occurs to iptables, then it complains.
         network_info = self._get_instance_nw_info(context, instance_ref)
-
-        # TODO(tr3buchet): figure out how on the earth this is necessary
-        fixed_ips = network_info.fixed_ips()
-        if not fixed_ips:
-            raise exception.FixedIpNotFoundForInstance(instance_id=instance_id)
-
-        max_retry = FLAGS.live_migration_retry_count
-        for cnt in range(max_retry):
-            try:
-                self.driver.plug_vifs(instance_ref,
-                                      self._legacy_nw_info(network_info))
-                break
-            except exception.ProcessExecutionError:
-                if cnt == max_retry - 1:
-                    raise
-                else:
-                    LOG.warn(_("plug_vifs() failed %(cnt)d."
-                               "Retry up to %(max_retry)d for %(hostname)s.")
-                               % locals())
-                    time.sleep(1)
 
         # Creating filters to hypervisors and firewalls.
         # An example is that nova-instance-instance-xxx,
