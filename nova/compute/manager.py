@@ -1936,6 +1936,23 @@ class ComputeManager(manager.SchedulerDependentManager):
         """
         return self.driver.get_instance_disk_info(instance_name)
 
+    def check_can_live_migrate(self, ctxt, instance_id, dest,
+                               block_migration=False,
+                               disk_over_commit=False):
+        """Check if it is possible to execute live migration.
+
+        :param context: security context
+        :param instance_id: nova.db.sqlalchemy.models.Instance.Id
+        :param dest: destination host
+        :param block_migration: if true, prepare for block migration
+        :param disk_over_commit: if true, allow disk over commit
+
+        """
+        instance_ref = self.db.instance_get(ctxt, instance_id)
+        self.driver.check_can_live_migrate(ctxt, instance_ref,
+                                           dest, block_migration,
+                                           disk_over_commit)
+
     def pre_live_migration(self, context, instance_id,
                            block_migration=False, disk=None):
         """Preparations for live migration at dest host.
@@ -1954,40 +1971,14 @@ class ComputeManager(manager.SchedulerDependentManager):
         if not block_device_info['block_device_mapping']:
             LOG.info(_('Instance has no volume.'), instance=instance_ref)
 
-        self.driver.pre_live_migration(block_device_info)
+        network_info = self._get_instance_nw_info(context, instance_ref)
+
+        self.driver.pre_live_migration(context, instance_ref,
+                                       block_device_info, network_info)
 
         # NOTE(tr3buchet): setup networks on destination host
         self.network_api.setup_networks_on_host(context, instance_ref,
                                                          self.host)
-
-        # Bridge settings.
-        # Call this method prior to ensure_filtering_rules_for_instance,
-        # since bridge is not set up, ensure_filtering_rules_for instance
-        # fails.
-        #
-        # Retry operation is necessary because continuously request comes,
-        # concorrent request occurs to iptables, then it complains.
-        network_info = self._get_instance_nw_info(context, instance_ref)
-
-        # TODO(tr3buchet): figure out how on the earth this is necessary
-        fixed_ips = network_info.fixed_ips()
-        if not fixed_ips:
-            raise exception.FixedIpNotFoundForInstance(instance_id=instance_id)
-
-        max_retry = FLAGS.live_migration_retry_count
-        for cnt in range(max_retry):
-            try:
-                self.driver.plug_vifs(instance_ref,
-                                      self._legacy_nw_info(network_info))
-                break
-            except exception.ProcessExecutionError:
-                if cnt == max_retry - 1:
-                    raise
-                else:
-                    LOG.warn(_("plug_vifs() failed %(cnt)d."
-                               "Retry up to %(max_retry)d for %(hostname)s.")
-                               % locals(), instance=instance_ref)
-                    time.sleep(1)
 
         # Creating filters to hypervisors and firewalls.
         # An example is that nova-instance-instance-xxx,

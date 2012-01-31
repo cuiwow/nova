@@ -39,6 +39,7 @@ from nova import flags
 from nova import log as logging
 from nova.openstack.common import importutils
 from nova.openstack.common import jsonutils
+from nova import rpc
 from nova import test
 from nova.tests import fake_libvirt_utils
 from nova.tests import fake_network
@@ -1258,6 +1259,200 @@ class LibvirtConnTestCase(test.TestCase):
 
         db.instance_destroy(self.context, instance_ref['id'])
 
+    def test_check_can_live_migrate_all_pass_with_block_migration(self):
+        instance_ref = db.instance_create(self.context, self.test_instance)
+        dest = "fake_host_2"
+        src = instance_ref['host']
+        conn = connection.LibvirtConnection(False)
+
+        self.mox.StubOutWithMock(conn, '_get_compute_info')
+        self.mox.StubOutWithMock(conn, 'get_instance_disk_info')
+        self.mox.StubOutWithMock(db, 'queue_get_for')
+        self.mox.StubOutWithMock(rpc, 'call')
+        self.mox.StubOutWithMock(rpc, 'cast')
+
+        conn._get_compute_info(self.context, "fake_host_2").AndReturn(
+                                              {'disk_available_least': 400})
+        conn.get_instance_disk_info(self.context,
+                                    instance_ref["name"]).AndReturn(
+                                            '[{"virt_disk_size":2}]')
+        # mounted_on_same_shared_storage
+        db.queue_get_for(self.context, FLAGS.compute_topic, dest).AndReturn(
+                                                                        "dest")
+        db.queue_get_for(self.context, FLAGS.compute_topic,
+                         instance_ref['host']).AndReturn("src")
+        filename = "file"
+        rpc.call(self.context, "dest",
+                 {"method": 'create_shared_storage_test_file'}
+                ).AndReturn(filename)
+        rpc.call(self.context, "src",
+                        {"method": 'check_shared_storage_test_file',
+                        "args": {'filename': filename}})
+        rpc.cast(self.context, "dest",
+                    {"method": 'cleanup_shared_storage_test_file',
+                    "args": {'filename': filename}})
+
+        # _check_cpu_match
+        conn._get_compute_info(self.context,
+                               src).AndReturn({'cpu_info':"asdf"})
+        db.queue_get_for(self.context,
+                         FLAGS.compute_topic, dest).AndReturn("dest")
+        rpc.call(self.context, "dest",
+                     {"method": 'compare_cpu',
+                      "args": {'cpu_info': "asdf"}})
+
+        self.mox.ReplayAll()
+        conn.check_can_live_migrate(self.context, instance_ref, dest,
+                                    True, False)
+
+    def test_check_can_live_migrate_fail_space_with_block_migration(self):
+        instance_ref = db.instance_create(self.context, self.test_instance)
+        dest = "fake_host_2"
+        src = instance_ref['host']
+        conn = connection.LibvirtConnection(False)
+
+        self.mox.StubOutWithMock(conn, '_get_compute_info')
+        self.mox.StubOutWithMock(conn, 'get_instance_disk_info')
+        self.mox.StubOutWithMock(db, 'queue_get_for')
+        self.mox.StubOutWithMock(rpc, 'call')
+        self.mox.StubOutWithMock(rpc, 'cast')
+
+        conn._get_compute_info(self.context, "fake_host_2").AndReturn(
+                                              {'disk_available_least':0})
+        conn.get_instance_disk_info(self.context,
+                                    instance_ref["name"]).AndReturn(
+                                            '[{"virt_disk_size":2}]')
+
+        self.mox.ReplayAll()
+        self.assertRaises(exception.MigrationError, conn.check_can_live_migrate,
+                            self.context, instance_ref, dest, True, False)
+
+    def test_check_can_live_migrate_fail_shared_storage_with_block_migration(self):
+        instance_ref = db.instance_create(self.context, self.test_instance)
+        dest = "fake_host_2"
+        src = instance_ref['host']
+        conn = connection.LibvirtConnection(False)
+
+        self.mox.StubOutWithMock(conn, '_get_compute_info')
+        self.mox.StubOutWithMock(conn, 'get_instance_disk_info')
+        self.mox.StubOutWithMock(db, 'queue_get_for')
+        self.mox.StubOutWithMock(rpc, 'call')
+        self.mox.StubOutWithMock(rpc, 'cast')
+
+        conn._get_compute_info(self.context, "fake_host_2").AndReturn(
+                                              {'disk_available_least':400})
+        conn.get_instance_disk_info(self.context,
+                                    instance_ref["name"]).AndReturn(
+                                            '[{"virt_disk_size":2}]')
+        # mounted_on_same_shared_storage
+        db.queue_get_for(self.context, FLAGS.compute_topic, dest).AndReturn("dest")
+        db.queue_get_for(self.context, FLAGS.compute_topic, instance_ref['host']).AndReturn("src")
+        filename = "file"
+        rpc.call(self.context, "dest", {"method": 'create_shared_storage_test_file'}).AndReturn(filename)
+        rpc.call(self.context, "src",
+                        {"method": 'check_shared_storage_test_file',
+                        "args": {'filename': filename}}).AndReturn(True)
+        rpc.cast(self.context, "dest",
+                    {"method": 'cleanup_shared_storage_test_file',
+                    "args": {'filename': filename}})
+
+        self.mox.ReplayAll()
+        self.assertRaises(exception.InvalidSharedStorage,
+                          conn.check_can_live_migrate,
+                              self.context, instance_ref, dest, True, False)
+
+    def test_check_can_live_migrate_all_pass_no_block_migration(self):
+        instance_ref = db.instance_create(self.context, self.test_instance)
+        dest = "fake_host_2"
+        src = instance_ref['host']
+        conn = connection.LibvirtConnection(False)
+
+        self.mox.StubOutWithMock(conn, '_get_compute_info')
+        self.mox.StubOutWithMock(conn, 'get_instance_disk_info')
+        self.mox.StubOutWithMock(db, 'queue_get_for')
+        self.mox.StubOutWithMock(rpc, 'call')
+        self.mox.StubOutWithMock(rpc, 'cast')
+
+        # mounted_on_same_shared_storage
+        db.queue_get_for(self.context, FLAGS.compute_topic, dest).AndReturn("dest")
+        db.queue_get_for(self.context, FLAGS.compute_topic, instance_ref['host']).AndReturn("src")
+        filename = "file"
+        rpc.call(self.context, "dest", {"method": 'create_shared_storage_test_file'}).AndReturn(filename)
+        rpc.call(self.context, "src",
+                        {"method": 'check_shared_storage_test_file',
+                        "args": {'filename': filename}}).AndReturn(True)
+        rpc.cast(self.context, "dest",
+                    {"method": 'cleanup_shared_storage_test_file',
+                    "args": {'filename': filename}})
+
+        # _check_cpu_match
+        conn._get_compute_info(self.context, src).AndReturn({'cpu_info':"asdf"})
+        db.queue_get_for(self.context, FLAGS.compute_topic, dest).AndReturn("dest")
+        rpc.call(self.context, "dest",
+                     {"method": 'compare_cpu',
+                      "args": {'cpu_info': "asdf"}})
+
+        self.mox.ReplayAll()
+        conn.check_can_live_migrate(self.context, instance_ref, dest,
+                                    False, False)
+
+    def test_check_can_live_migrate_no_shared_storage_no_block_migration_raises(self):
+        instance_ref = db.instance_create(self.context, self.test_instance)
+        dest = "fake_host_2"
+        src = instance_ref['host']
+        conn = connection.LibvirtConnection(False)
+
+        self.mox.StubOutWithMock(conn, '_get_compute_info')
+        self.mox.StubOutWithMock(conn, 'get_instance_disk_info')
+        self.mox.StubOutWithMock(db, 'queue_get_for')
+        self.mox.StubOutWithMock(rpc, 'call')
+        self.mox.StubOutWithMock(rpc, 'cast')
+
+        # mounted_on_same_shared_storage
+        db.queue_get_for(self.context, FLAGS.compute_topic, dest).AndReturn("dest")
+        db.queue_get_for(self.context, FLAGS.compute_topic, instance_ref['host']).AndReturn("src")
+        filename = "file"
+        rpc.call(self.context, "dest", {"method": 'create_shared_storage_test_file'}).AndReturn(filename)
+        rpc.call(self.context, "src",
+                        {"method": 'check_shared_storage_test_file',
+                        "args": {'filename': filename}}).AndReturn(False)
+        rpc.cast(self.context, "dest",
+                    {"method": 'cleanup_shared_storage_test_file',
+                    "args": {'filename': filename}})
+
+        self.mox.ReplayAll()
+        self.assertRaises(exception.InvalidSharedStorage,
+                          conn.check_can_live_migrate,
+                              self.context, instance_ref, dest, False, False)
+
+    def test_check_can_live_migrate_incompatible_cpu_raises(self):
+        instance_ref = db.instance_create(self.context, self.test_instance)
+        dest = "fake_host_2"
+        src = instance_ref['host']
+        conn = connection.LibvirtConnection(False)
+
+        self.mox.StubOutWithMock(conn, '_get_compute_info')
+        self.mox.StubOutWithMock(conn, 'get_instance_disk_info')
+        self.mox.StubOutWithMock(conn, '_live_migration_storage_check')
+        self.mox.StubOutWithMock(db, 'queue_get_for')
+        self.mox.StubOutWithMock(rpc, 'call')
+        self.mox.StubOutWithMock(rpc, 'cast')
+
+        conn._live_migration_storage_check(self.context, instance_ref, dest, False)
+
+        # _check_cpu_match
+        conn._get_compute_info(self.context, src).AndReturn({'cpu_info':"asdf"})
+        db.queue_get_for(self.context, FLAGS.compute_topic, dest).AndReturn("dest")
+        rpc.call(self.context, "dest",
+                     {"method": 'compare_cpu',
+                      "args": {'cpu_info': "asdf"}}).AndRaise(
+                                                exception.InvalidCPUInfo)
+
+        self.mox.ReplayAll()
+        self.assertRaises(exception.InvalidCPUInfo,
+                          conn.check_can_live_migrate,
+                              self.context, instance_ref, dest, False, False)
+
     @test.skip_if(missing_libvirt(), "Test requires libvirt")
     def test_live_migration_raises_exception(self):
         """Confirms recover method is called when exceptions are raised."""
@@ -1311,13 +1506,38 @@ class LibvirtConnTestCase(test.TestCase):
         db.volume_destroy(self.context, volume_ref['id'])
         db.instance_destroy(self.context, instance_ref['id'])
 
+    def test_pre_live_migration_instance_has_no_fixed_ip(self):
+        """Confirm raising exception if instance doesn't have fixed_ip."""
+        conn = connection.LibvirtConnection(False)
+
+        class FakeNetworkInfo():
+            def fixed_ips(self):
+                return []
+
+        class FakeInstance():
+            def __init__(self):
+                self.id = "foo"
+
+        self.assertRaises(exception.FixedIpNotFoundForInstance,
+                          conn.pre_live_migration,
+                          None, FakeInstance(), None, FakeNetworkInfo())
+
     def test_pre_live_migration_works_correctly(self):
         """Confirms pre_block_migration works correctly."""
         # Creating testdata
+        # TODO - include vif plug tests
         vol = {'block_device_mapping': [
                   {'connection_info': 'dummy', 'mount_device': '/dev/sda'},
                   {'connection_info': 'dummy', 'mount_device': '/dev/sdb'}]}
         conn = connection.LibvirtConnection(False)
+
+        class FakeNetworkInfo():
+            def fixed_ips(self):
+                return ["test_ip_addr"]
+
+        inst_ref = {'id': 'foo'}
+        c = context.get_admin_context()
+        nw_info = FakeNetworkInfo()
 
         # Creating mocks
         self.mox.StubOutWithMock(driver, "block_device_info_get_mapping")
@@ -1327,10 +1547,14 @@ class LibvirtConnTestCase(test.TestCase):
         for v in vol['block_device_mapping']:
             conn.volume_driver_method('connect_volume',
                                      v['connection_info'], v['mount_device'])
+        self.mox.StubOutWithMock(compute_utils, 'legacy_network_info')
+        compute_utils.legacy_network_info(nw_info).AndReturn(nw_info)
+        self.mox.StubOutWithMock(conn, 'plug_vifs')
+        conn.plug_vifs(mox.IsA(inst_ref), nw_info)
 
-        # Starting test
         self.mox.ReplayAll()
-        self.assertEqual(conn.pre_live_migration(vol), None)
+        result = conn.pre_live_migration(c, inst_ref, vol, nw_info)
+        self.assertEqual(result, None)
 
     @test.skip_if(missing_libvirt(), "Test requires libvirt")
     def test_pre_block_migration_works_correctly(self):
