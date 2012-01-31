@@ -1311,13 +1311,38 @@ class LibvirtConnTestCase(test.TestCase):
         db.volume_destroy(self.context, volume_ref['id'])
         db.instance_destroy(self.context, instance_ref['id'])
 
+    def test_pre_live_migration_instance_has_no_fixed_ip(self):
+        """Confirm raising exception if instance doesn't have fixed_ip."""
+        conn = connection.LibvirtConnection(False)
+
+        class FakeNetworkInfo():
+            def fixed_ips(self):
+                return []
+
+        class FakeInstance():
+            def __init__(self):
+                self.id = "foo"
+
+        self.assertRaises(exception.FixedIpNotFoundForInstance,
+                          conn.pre_live_migration,
+                          None, FakeInstance(), None, FakeNetworkInfo())
+
     def test_pre_live_migration_works_correctly(self):
         """Confirms pre_block_migration works correctly."""
         # Creating testdata
+        # TODO - include vif plug tests
         vol = {'block_device_mapping': [
                   {'connection_info': 'dummy', 'mount_device': '/dev/sda'},
                   {'connection_info': 'dummy', 'mount_device': '/dev/sdb'}]}
         conn = connection.LibvirtConnection(False)
+
+        class FakeNetworkInfo():
+            def fixed_ips(self):
+                return ["test_ip_addr"]
+
+        inst_ref = {'id': 'foo'}
+        c = context.get_admin_context()
+        nw_info = FakeNetworkInfo()
 
         # Creating mocks
         self.mox.StubOutWithMock(driver, "block_device_info_get_mapping")
@@ -1327,10 +1352,14 @@ class LibvirtConnTestCase(test.TestCase):
         for v in vol['block_device_mapping']:
             conn.volume_driver_method('connect_volume',
                                      v['connection_info'], v['mount_device'])
+        self.mox.StubOutWithMock(compute_utils, 'legacy_network_info')
+        compute_utils.legacy_network_info(nw_info).AndReturn(nw_info)
+        self.mox.StubOutWithMock(conn, 'plug_vifs')
+        conn.plug_vifs(mox.IsA(inst_ref), nw_info)
 
-        # Starting test
         self.mox.ReplayAll()
-        self.assertEqual(conn.pre_live_migration(vol), None)
+        result = conn.pre_live_migration(c, inst_ref, vol, nw_info)
+        self.assertEqual(result, None)
 
     @test.skip_if(missing_libvirt(), "Test requires libvirt")
     def test_pre_block_migration_works_correctly(self):

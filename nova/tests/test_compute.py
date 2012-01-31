@@ -1370,6 +1370,7 @@ class ComputeTestCase(BaseTestCase):
         self.assertEqual(inst_ref['vm_state'], vm_states.ERROR)
         self.compute.terminate_instance(context, inst_ref['uuid'])
 
+    # TODO(JohnGar) - is this test still valid?
     def test_pre_live_migration_instance_has_no_fixed_ip(self):
         """Confirm raising exception if instance doesn't have fixed_ip."""
         # creating instance testdata
@@ -1394,13 +1395,13 @@ class ComputeTestCase(BaseTestCase):
         # creating instance testdata
         inst_ref = self._create_fake_instance({'host': 'dummy'})
         c = context.get_admin_context()
+        nw_info = fake_network.fake_get_instance_nw_info(self.stubs)
 
         # creating mocks
         self.mox.StubOutWithMock(self.compute.driver, 'pre_live_migration')
-        self.compute.driver.pre_live_migration({'block_device_mapping': []})
-        nw_info = fake_network.fake_get_instance_nw_info(self.stubs)
-        self.mox.StubOutWithMock(self.compute.driver, 'plug_vifs')
-        self.compute.driver.plug_vifs(mox.IsA(inst_ref), nw_info)
+        self.compute.driver.pre_live_migration(mox.IsA(c), mox.IsA(inst_ref),
+                                               {'block_device_mapping': []},
+                                               mox.IgnoreArg())
         self.mox.StubOutWithMock(self.compute.driver,
                                  'ensure_filtering_rules_for_instance')
         self.compute.driver.ensure_filtering_rules_for_instance(

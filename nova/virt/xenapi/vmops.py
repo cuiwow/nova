@@ -1513,6 +1513,33 @@ class VMOps(object):
         self.firewall_driver.unfilter_instance(instance_ref,
                                                network_info=network_info)
 
+    ########################################################################
+
+    def _get_host_opaque_ref(self, context, destination_hostname):
+        current_aggregate = db.aggregate_get_by_host(context, FLAGS.host)
+        try:
+            host_uuid = current_aggregate.metadetails[destination_hostname]
+        except KeyError:
+            raise Exception(_("Destination must in the same aggregate "
+                              "as the current server"))
+
+        return self._session.call_xenapi("host.get_by_uuid", host_uuid)
+
+    def live_migrate(self, context, instance, destination_hostname,
+                     post_method, recover_method, block_migration):
+        vm_ref = self._get_vm_opaque_ref(instance)
+        host_ref = self._get_host_opaque_ref(context, destination_hostname)
+
+        try:
+            self._session.call_xenapi("VM.pool_migrate", vm_ref, host_ref, {})
+        except Exception:
+            with utils.save_and_reraise_exception():
+                recover_method(context, instance, destination_hostname,
+                               block_migration)
+
+        # Complete the rest of the post migration operations
+        post_method(context, instance, destination_hostname, block_migration)
+
 
 class SimpleDH(object):
     """
