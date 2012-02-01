@@ -919,6 +919,11 @@ class QuotaError(ApiError):
     pass
 
 
+class AggregateError(NovaException):
+    message = _("Aggregate %(aggregate_id)s: action '%(action)s' "
+                "caused an error: %(reason)s.")
+
+
 class AggregateNotFound(NotFound):
     message = _("Aggregate %(aggregate_id)s could not be found.")
 
