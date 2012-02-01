@@ -33,6 +33,7 @@ import subprocess
 import tempfile
 import time
 
+import XenAPI
 import XenAPIPlugin
 import pluginlib_nova as pluginlib
 
@@ -258,6 +259,28 @@ def host_start(self, arg_dict):
 
 
 @jsonify
+def host_join(self, arg_dict):
+    """Join a remote host into a pool whose master is the host
+    where the plugin is called from."""
+    session = XenAPI.Session(arg_dict.get("url"))
+    session.login_with_password(arg_dict.get("user"),
+                                arg_dict.get("password"))
+    compute_ref = session.xenapi.VM.get_by_uuid(arg_dict.get('compute_uuid'))
+    session.xenapi.VM.shutdown(compute_ref)
+    try:
+        if arg_dict.get("force"):
+            session.xenapi.pool.join(arg_dict.get("master_addr"),
+                                     arg_dict.get("master_user"),
+                                     arg_dict.get("master_pass"))
+        else:
+            session.xenapi.pool.join_force(arg_dict.get("master_addr"),
+                                           arg_dict.get("master_user"),
+                                           arg_dict.get("master_pass"))
+    finally:
+        session.xenapi.VM.start(compute_ref, False, True)
+
+
+@jsonify
 def host_data(self, arg_dict):
     """Runs the commands on the xenstore host to return the current status
     information.
@@ -380,6 +403,7 @@ if __name__ == "__main__":
             "host_shutdown": host_shutdown,
             "host_reboot": host_reboot,
             "host_start": host_start,
+            "host_join": host_join,
             "get_config": get_config,
             "set_config": set_config,
             "iptables_config": iptables_config})

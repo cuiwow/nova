@@ -81,6 +81,7 @@ from nova.virt import driver
 from nova.virt.xenapi import vm_utils
 from nova.virt.xenapi.vmops import VMOps
 from nova.virt.xenapi.volumeops import VolumeOps
+from nova.virt.xenapi.pool import ResourcePool
 
 
 LOG = logging.getLogger("nova.virt.xenapi")
@@ -179,6 +180,7 @@ class XenAPIConnection(driver.ComputeDriver):
         self._host_state = None
         self._product_version = self._session.get_product_version()
         self._vmops = VMOps(self._session, self._product_version)
+        self._pool = ResourcePool(self._session)
 
     @property
     def host_state(self):
@@ -478,6 +480,15 @@ class XenAPIConnection(driver.ComputeDriver):
     def set_host_enabled(self, host, enabled):
         """Sets the specified host's ability to accept new instances."""
         return self._vmops.set_host_enabled(host, enabled)
+
+    def add_to_aggregate(self, context, aggregate, host, **kwargs):
+        """Add a compute host to an aggregate."""
+        return self._pool.add_to_aggregate(context, aggregate, host, **kwargs)
+
+    def remove_from_aggregate(self, context, aggregate, host, **kwargs):
+        """Remove a compute host from an aggregate."""
+        return self._pool.remove_from_aggregate(context,
+                                                aggregate, host, **kwargs)
 
 
 class XenAPISession(object):
