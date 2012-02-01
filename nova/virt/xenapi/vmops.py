@@ -1,4 +1,5 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
+from bzrlib.missing import locals
 
 # Copyright (c) 2010 Citrix Systems, Inc.
 # Copyright 2010 OpenStack LLC.
@@ -25,6 +26,7 @@ import pickle
 import random
 import sys
 import time
+import urlparse
 import uuid
 
 from eventlet import greenthread
@@ -38,6 +40,7 @@ from nova import db
 from nova import exception
 from nova import flags
 from nova import log as logging
+from nova import rpc
 from nova import utils
 from nova.virt import driver
 from nova.virt.xenapi import volume_utils
@@ -611,7 +614,7 @@ class VMOps(object):
         """
         template_vm_ref = None
         try:
-            template_vm_ref, template_vdi_uuids =\
+            template_vm_ref, template_vdi_uuids = \
                     self._create_snapshot(instance)
             # call plugin to ship snapshot off to glance
             VMHelper.upload_image(context,
@@ -704,7 +707,7 @@ class VMOps(object):
         template_vdi_uuids = template_vm_ref = None
         try:
             # 1. Create Snapshot
-            template_vm_ref, template_vdi_uuids =\
+            template_vm_ref, template_vdi_uuids = \
                     self._create_snapshot(instance)
             self._update_instance_progress(context, instance,
                                            step=1,
@@ -1418,6 +1421,11 @@ class VMOps(object):
         return {'host': FLAGS.vncserver_proxyclient_address, 'port': 80,
                 'internal_access_path': path}
 
+    ##############################
+    # Host related commands
+    # TODO: create host ops file?
+    ###
+
     def host_power_action(self, host, action):
         """Reboots or shuts down the host."""
         args = {"action": json.dumps(action)}
@@ -1437,6 +1445,79 @@ class VMOps(object):
             return xenapi_resp.details[-1]
         return resp["status"]
 
+    def add_to_aggregate(self, context, aggregate, host, **kwargs):
+        """Add a compute host to an aggregate."""
+        if len(aggregate.hosts) == 0:
+            # this is the first host of the pool -> make it master
+            try:
+                pool_ref = self._session.call_xenapi("pool.get_all")[0]
+                self._session.call_xenapi("pool.set_name_label",
+                                          pool_ref, aggregate.name)
+            except self.XenAPI.Failure, e:
+                LOG.error(_("Unable to set up pool: %(e)s.") % locals())
+                raise exception.AggregateError(aggregate_id=aggregate.id,
+                                               action='add_to_aggregate',
+                                               reason=str(e.details))
+            # save metadata so that we can find the master again:
+            # the password should be encrypted, really.
+            url = FLAGS.xenapi_connection_url
+            metadata = {'master_hostname': urlparse.urlparse(url).hostname,
+                        'master_username': FLAGS.xenapi_connection_username,
+                        'master_password': FLAGS.xenapi_connection_password, }
+            db.aggregate_metadata_add(context, aggregate.id, metadata)
+        else:
+            # at this point, if this host is not the master, then an rpc.cast
+            # to the master is required to make the pool-join. Otherwise
+            # call the pool-join directly.
+            master = aggregate.metadetails['master_hostname']
+            mehost = urlparse.urlparse(FLAGS.xenapi_connection_url).hostname
+            if master != mehost:
+                # send rpc cast to master, asking to add the following
+                # host with specified credentials.
+                # NOTE: password in clear is not great, but it'll do for now
+                rpc.cast(context, FLAGS.compute_topic,
+                         {"method": "add_to_aggregate",
+                          "args": {"aggregate": aggregate,
+                                   "host": host,
+                                   "url": FLAGS.xenapi_connection_url,
+                                   "user": FLAGS.xenapi_connection_username,
+                                   "pass": FLAGS.xenapi_connection_password, },
+                         })
+            else:
+                # use xenapi session with no fringes to make the join
+                session = self.XenAPI.Session(kwargs.get('url'))
+                session.login_with_password(kwargs.get('user'),
+                                            kwargs.get('pass'))
+                try:
+                    url = FLAGS.xenapi_connection_url
+                    urlparse.urlparse(url).hostname
+                    session.xenapi.join(FLAGS.xenapi_connection_username,
+                                        FLAGS.xenapi_connection_password)
+                except self.XenAPI.Failure, e:
+                    LOG.warning(_("Pool-Join failed: %(e)s. Trying with "
+                                  "join_force.") % locals())
+                    try:
+                        session.xenapi.join(FLAGS.xenapi_connection_username,
+                                        FLAGS.xenapi_connection_password)
+                    except self.XenAPI.Failure:
+                        LOG.exception(_("Join failed on %(host)s." % locals()))
+                        raise exception.\
+                            AggregateError(aggregate_id=aggregate.id,
+                                           action='add_to_aggregate',
+                                           reason='Unable to join %(host)s'
+                                            'in the pool' % locals())
+
+    def remove_from_aggregate(self, context, aggregate, host, **kwargs):
+        try:
+            host_ref = self._session.call_xenapi("host.get_by_name_label",
+                                                 host)
+            self._session.call_xenapi("pool.eject", host_ref)
+        except self.XenAPI.Failure, e:
+            LOG.error(_("Error during xenapi call: %(e)s.") % locals())
+            raise exception.AggregateError(aggregate_id=aggregate.id,
+                                           action='remove_from_aggregate',
+                                           reason=str(e.details))
+
     def _call_xenhost(self, method, arg_dict):
         """There will be several methods that will need this general
         handling for interacting with the xenhost plugin, so this abstracts
@@ -1454,6 +1535,8 @@ class VMOps(object):
             LOG.error(_("The call to %(method)s returned an error: %(e)s.")
                     % locals())
         return ret
+
+    #################
 
     def inject_network_info(self, instance, network_info, vm_ref=None):
         """

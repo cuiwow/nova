@@ -605,3 +605,11 @@ class ComputeDriver(object):
         Note that this function takes an instance ID.
         """
         raise NotImplementedError()
+
+    def add_to_aggregate(self, context, aggregate, host, **kwargs):
+        """Add a compute host to an aggregate."""
+        raise NotImplementedError()
+
+    def remove_from_aggregate(self, context, aggregate, host, **kwargs):
+        """Remove a compute host from an aggregate."""
+        raise NotImplementedError()

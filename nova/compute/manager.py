@@ -46,6 +46,7 @@ from eventlet import greenthread
 from nova import block_device
 import nova.context
 from nova.common import cfg
+from nova.compute import aggregate_states
 from nova.compute import instance_types
 from nova.compute import power_state
 from nova.compute import task_states
@@ -2222,10 +2223,25 @@ class ComputeManager(manager.SchedulerDependentManager):
                                       vm_state=vm_states.ERROR,
                                       task_state=None)
 
-    def add_aggregate_host(self, context, aggregate_id, host):
+    @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
+    def add_aggregate_host(self, context, aggregate_id, host, **kwargs):
         """Adds a host to a physical hypervisor pool."""
-        raise NotImplementedError()
+        aggregate = self.db.aggregate_get(context, aggregate_id)
+        try:
+            self.driver.add_to_aggregate(context, aggregate, host, **kwargs)
+        except exception.AggregateError:
+            status = {'operational_state': aggregate_states.ERROR}
+            self.db.aggregate_update(context, aggregate.id, status)
+            raise
 
-    def remove_aggregate_host(self, context, aggregate_id, host):
+    @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
+    def remove_aggregate_host(self, context, aggregate_id, host, **kwargs):
         """Removes a host from a physical hypervisor pool."""
-        raise NotImplementedError()
+        aggregate = self.db.aggregate_get(context, aggregate_id)
+        try:
+            self.driver.remove_from_aggregate(context,
+                                              aggregate, host, **kwargs)
+        except exception.AggregateError:
+            status = {'operational_state': aggregate_states.ERROR}
+            self.db.aggregate_update(context, aggregate.id, status)
+            raise

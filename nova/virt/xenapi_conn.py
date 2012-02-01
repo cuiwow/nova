@@ -479,6 +479,14 @@ class XenAPIConnection(driver.ComputeDriver):
         """Sets the specified host's ability to accept new instances."""
         return self._vmops.set_host_enabled(host, enabled)
 
+    def add_to_aggregate(self, context, aggregate, host, **kwargs):
+        """Add a compute host to an aggregate."""
+        return self._vmops.add_to_aggregate(context, aggregate, host)
+
+    def remove_from_aggregate(self, context, aggregate, host, **kwargs):
+        """Remove a compute host from an aggregate."""
+        return self._vmops.remove_from_aggregate(context, aggregate, host)
+
 
 class XenAPISession(object):
     """The session to invoke XenAPI SDK calls"""
