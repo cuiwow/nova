@@ -4401,8 +4401,7 @@ def aggregate_metadata_add(context, aggregate_id, metadata, set_delete=False):
             meta_ref = aggregate_metadata_get_item(context, aggregate_id,
                                                   meta_key, session)
             if meta_ref.deleted:
-                item.update({'deleted': False, 'deleted_at': None,
-                             'updated_at': literal_column('updated_at')})
+                item.update({'deleted': False, 'deleted_at': None})
         except exception.AggregateMetadataNotFound:
             meta_ref = models.AggregateMetadata()
             item.update({"key": meta_key, "aggregate_id": aggregate_id})
@@ -4461,9 +4460,7 @@ def aggregate_host_add(context, aggregate_id, host):
         except exception.DBError:
             raise exception.AggregateHostConflict(host=host)
     elif host_ref.deleted:
-        host_ref.update({'deleted': False,
-                         'deleted_at': None,
-                         'updated_at': literal_column('updated_at')})
+        host_ref.update({'deleted': False, 'deleted_at': None})
         host_ref.save(session=session)
     else:
         raise exception.AggregateHostExists(host=host,

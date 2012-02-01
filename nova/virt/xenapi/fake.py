@@ -80,7 +80,7 @@ def log_db_contents(msg=None):
 def reset():
     for c in _CLASSES:
         _db_content[c] = {}
-    create_host('fake')
+    create_host('fake', 'fake_name')
     create_vm('fake',
               'Running',
               is_a_template=False,
@@ -98,9 +98,11 @@ def create_pool(name_label):
                           {'name_label': name_label})
 
 
-def create_host(name_label):
+def create_host(name_label, hostname='fake_name', address='127.0.0.1'):
     return _create_object('host',
-                          {'name_label': name_label})
+                          {'name_label': name_label,
+                           'hostname': hostname,
+                           'address': address})
 
 
 def create_network(name_label, bridge):

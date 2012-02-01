@@ -1768,6 +1768,14 @@ class XenAPIAggregateTestCase(test.TestCase):
 
         self.conn._pool.remove_from_aggregate(None, None, "test_host")
         self.assertTrue(fake_pool_eject.called)
+    
+    def test_remove_from_empty_aggregate(self):
+        values = {"name": 'fake_aggregate',
+                  "availability_zone": 'fake_zone'}
+        result = db.aggregate_create(self.context, values)
+        self.assertRaises(exception.AggregateError,
+                          self.conn._pool.remove_from_aggregate,
+                          None, result, "test_host")
 
     def test_add_to_aggregate_first_host(self):
         def fake_pool_set_name_label(self, session, pool_ref, name):

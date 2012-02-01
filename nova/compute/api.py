@@ -1867,7 +1867,8 @@ class AggregateAPI(base.Base):
                                                "host": host}, })
             return self.get_aggregate(context, aggregate_id)
         else:
-            invalid = {aggregate_states.CHANGING: 'setup in progress',
+            invalid = {aggregate_states.CREATED: 'no hosts to remove',
+                       aggregate_states.CHANGING: 'setup in progress',
                        aggregate_states.DISMISSED: 'aggregate deleted', }
             if aggregate.operational_state in invalid.keys():
                 raise exception.\
