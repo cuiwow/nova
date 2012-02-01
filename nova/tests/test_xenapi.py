@@ -31,6 +31,7 @@ from nova import flags
 from nova import log as logging
 from nova import test
 from nova import utils
+from nova.compute import aggregate_states
 from nova.compute import instance_types
 from nova.compute import power_state
 from nova import exception
@@ -1717,3 +1718,69 @@ class XenAPISRSelectionTestCase(test.TestCase):
         expected = helper.safe_find_sr(session)
         self.assertEqual(session.call_xenapi('pool.get_default_SR', pool_ref),
                          expected)
+
+
+class XenAPIAggregateTestCase(test.TestCase):
+    """Unit tests for aggregate operations."""
+    def setUp(self):
+        super(XenAPIAggregateTestCase, self).setUp()
+        self.stubs = stubout.StubOutForTesting()
+        self.flags(xenapi_connection_url='http://test_url',
+                   xenapi_connection_user='test_user',
+                   xenapi_connection_password='test_pass',
+                   instance_name_template='%d',
+                   firewall_driver='nova.virt.xenapi.firewall.'
+                                   'Dom0IptablesFirewallDriver')
+        xenapi_fake.reset()
+        stubs.stubout_session(self.stubs, stubs.FakeSessionForVMTests)
+        self.context = context.get_admin_context()
+        self.conn = xenapi_conn.get_connection(False)
+
+    def tearDown(self):
+        super(XenAPIAggregateTestCase, self).tearDown()
+        self.stubs.UnsetAll()
+
+    def test_add_to_aggregate_called(self):
+        def fake_add_to_aggregate(context, aggregate, host):
+            fake_add_to_aggregate.called = True
+        self.stubs.Set(self.conn._vmops,
+                       "add_to_aggregate",
+                       fake_add_to_aggregate)
+
+        self.conn.add_to_aggregate(None, None, None)
+        self.assertTrue(fake_add_to_aggregate.called)
+
+    def test_remove_from_aggregate_called(self):
+        def fake_remove_from_aggregate(context, aggregate, host):
+            fake_remove_from_aggregate.called = True
+        self.stubs.Set(self.conn._vmops,
+                       "remove_from_aggregate",
+                       fake_remove_from_aggregate)
+
+        self.conn.remove_from_aggregate(None, None, None)
+        self.assertTrue(fake_remove_from_aggregate.called)
+
+    def test_remove_from_aggregate(self):
+        def fake_pool_eject(self, session, host_ref):
+            fake_pool_eject.called = True
+        self.stubs.Set(xenapi_fake.SessionBase, "pool_eject",
+                       fake_pool_eject)
+
+        self.conn._vmops.remove_from_aggregate(None, None, "test_host")
+        self.assertTrue(fake_pool_eject.called)
+
+    def test_add_to_aggregate_first_host(self):
+        def fake_pool_set_name_label(self, session, pool_ref, name):
+            fake_pool_set_name_label.called = True
+        self.stubs.Set(xenapi_fake.SessionBase, "pool_set_name_label",
+                       fake_pool_set_name_label)
+        self.conn._session.call_xenapi("pool.create", {"name": "asdf"})
+
+        values = {"name": 'fake_aggregate',
+                  "availability_zone": 'fake_zone'}
+        aggregate = db.aggregate_create(self.context, values)
+        self.assertEqual([], aggregate.hosts)
+        self.assertEqual({}, aggregate.metadetails)
+
+        self.conn._vmops.add_to_aggregate(self.context, aggregate, "host")
+        self.assertTrue(fake_pool_set_name_label.called)

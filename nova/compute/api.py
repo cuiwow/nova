@@ -28,6 +28,7 @@ import novaclient
 import webob.exc
 
 from nova import block_device
+from nova.common import cfg
 from nova.compute import aggregate_states
 from nova.compute import instance_types
 from nova.compute import power_state
@@ -49,12 +50,15 @@ from nova import volume
 
 LOG = logging.getLogger('nova.compute.api')
 
+find_host_timeout_opt = \
+    cfg.StrOpt('find_host_timeout',
+               default=30,
+               help='Timeout after NN seconds when looking for a host.')
 
 FLAGS = flags.FLAGS
+FLAGS.add_option(find_host_timeout_opt)
 flags.DECLARE('enable_zone_routing', 'nova.scheduler.api')
 flags.DECLARE('consoleauth_topic', 'nova.consoleauth')
-flags.DEFINE_integer('find_host_timeout', 30,
-                     'Timeout after NN seconds when looking for a host.')
 
 
 def check_instance_state(vm_state=None, task_state=None):
@@ -1751,10 +1755,18 @@ class AggregateAPI(base.Base):
 
     def create_aggregate(self, context, aggregate_name, availability_zone):
         """Creates the model for the aggregate."""
-        values = {"name": aggregate_name,
-                  "availability_zone": availability_zone}
-        aggregate = self.db.aggregate_create(context, values)
-        return dict(aggregate.iteritems())
+        zones = [s.availability_zone for s in
+                 self.db.service_get_all_by_topic(context,
+                                                  FLAGS.compute_topic)]
+        if availability_zone in zones:
+            values = {"name": aggregate_name,
+                      "availability_zone": availability_zone}
+            aggregate = self.db.aggregate_create(context, values)
+            return dict(aggregate.iteritems())
+        else:
+            raise exception.InvalidAggregateAction(action='create_aggregate',
+                                                   aggregate_id="'N/A'",
+                                                   reason='invalid zone')
 
     def get_aggregate(self, context, aggregate_id):
         """Get an aggregate by id."""

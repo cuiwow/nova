@@ -215,6 +215,14 @@ class Invalid(NovaException):
     message = _("Unacceptable parameters.")
 
 
+class InvalidKeypair(Invalid):
+    message = _("Keypair data is invalid")
+
+
+class SfJsonEncodeFailure(NovaException):
+    message = _("Failed to load data into json format")
+
+
 class InvalidRequest(Invalid):
     message = _("The request is invalid.")
 
@@ -392,6 +400,10 @@ class InstanceNotFound(NotFound):
 
 class VolumeNotFound(NotFound):
     message = _("Volume %(volume_id)s could not be found.")
+
+
+class SfAccountNotFound(NotFound):
+    message = _("Unable to locate account %(account_name) on Solidfire device")
 
 
 class VolumeNotFoundForInstance(VolumeNotFound):
@@ -907,6 +919,11 @@ class QuotaError(ApiError):
     pass
 
 
+class AggregateError(NovaException):
+    message = _("Aggregate %(aggregate_id)s: action '%(operation)s' "
+                "caused an error: ") + ": %(reason)s."
+
+
 class AggregateNotFound(NotFound):
     message = _("Aggregate %(aggregate_id)s could not be found.")
 
@@ -930,3 +947,7 @@ class AggregateHostConflict(Duplicate):
 
 class AggregateHostExists(Duplicate):
     message = _("Aggregate %(aggregate_id)s already has host %(host)s.")
+
+
+class DuplicateSfVolumeNames(Duplicate):
+    message = _("Detected more than one volume with name %(vol_name)")
