@@ -1,5 +1,4 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
-from bzrlib.missing import locals
 
 # Copyright (c) 2010 Citrix Systems, Inc.
 # Copyright 2010 OpenStack LLC.
