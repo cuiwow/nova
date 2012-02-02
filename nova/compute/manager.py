@@ -2232,6 +2232,8 @@ class ComputeManager(manager.SchedulerDependentManager):
         except exception.AggregateError:
             status = {'operational_state': aggregate_states.ERROR}
             self.db.aggregate_update(context, aggregate.id, status)
+            # UNDO
+            self.db.aggregate_host_delete(context, aggregate_id, host)
             raise
 
     @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
@@ -2244,4 +2246,6 @@ class ComputeManager(manager.SchedulerDependentManager):
         except exception.AggregateError:
             status = {'operational_state': aggregate_states.ERROR}
             self.db.aggregate_update(context, aggregate.id, status)
+            # UNDO
+            self.db.aggregate_host_add(context, aggregate_id, host)
             raise

@@ -81,6 +81,7 @@ from nova.virt import driver
 from nova.virt.xenapi import vm_utils
 from nova.virt.xenapi.vmops import VMOps
 from nova.virt.xenapi.volumeops import VolumeOps
+from nova.virt.xenapi.pool import ResourcePool
 
 
 LOG = logging.getLogger("nova.virt.xenapi")
@@ -179,6 +180,7 @@ class XenAPIConnection(driver.ComputeDriver):
         self._host_state = None
         self._product_version = self._session.get_product_version()
         self._vmops = VMOps(self._session, self._product_version)
+        self._pool = ResourcePool(self._session)
 
     @property
     def host_state(self):
@@ -481,11 +483,11 @@ class XenAPIConnection(driver.ComputeDriver):
 
     def add_to_aggregate(self, context, aggregate, host, **kwargs):
         """Add a compute host to an aggregate."""
-        return self._vmops.add_to_aggregate(context, aggregate, host)
+        return self._pool.add_to_aggregate(context, aggregate, host)
 
     def remove_from_aggregate(self, context, aggregate, host, **kwargs):
         """Remove a compute host from an aggregate."""
-        return self._vmops.remove_from_aggregate(context, aggregate, host)
+        return self._pool.remove_from_aggregate(context, aggregate, host)
 
 
 class XenAPISession(object):

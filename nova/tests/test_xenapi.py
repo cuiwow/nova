@@ -1743,7 +1743,7 @@ class XenAPIAggregateTestCase(test.TestCase):
     def test_add_to_aggregate_called(self):
         def fake_add_to_aggregate(context, aggregate, host):
             fake_add_to_aggregate.called = True
-        self.stubs.Set(self.conn._vmops,
+        self.stubs.Set(self.conn._pool,
                        "add_to_aggregate",
                        fake_add_to_aggregate)
 
@@ -1753,7 +1753,7 @@ class XenAPIAggregateTestCase(test.TestCase):
     def test_remove_from_aggregate_called(self):
         def fake_remove_from_aggregate(context, aggregate, host):
             fake_remove_from_aggregate.called = True
-        self.stubs.Set(self.conn._vmops,
+        self.stubs.Set(self.conn._pool,
                        "remove_from_aggregate",
                        fake_remove_from_aggregate)
 
@@ -1766,7 +1766,7 @@ class XenAPIAggregateTestCase(test.TestCase):
         self.stubs.Set(xenapi_fake.SessionBase, "pool_eject",
                        fake_pool_eject)
 
-        self.conn._vmops.remove_from_aggregate(None, None, "test_host")
+        self.conn._pool.remove_from_aggregate(None, None, "test_host")
         self.assertTrue(fake_pool_eject.called)
 
     def test_add_to_aggregate_first_host(self):
@@ -1778,9 +1778,11 @@ class XenAPIAggregateTestCase(test.TestCase):
 
         values = {"name": 'fake_aggregate',
                   "availability_zone": 'fake_zone'}
-        aggregate = db.aggregate_create(self.context, values)
-        self.assertEqual([], aggregate.hosts)
+        result = db.aggregate_create(self.context, values)
+        db.aggregate_host_add(self.context, result.id, "host")
+        aggregate = db.aggregate_get(self.context, result.id)
+        self.assertEqual(["host"], aggregate.hosts)
         self.assertEqual({}, aggregate.metadetails)
 
-        self.conn._vmops.add_to_aggregate(self.context, aggregate, "host")
+        self.conn._pool.add_to_aggregate(self.context, aggregate, "host")
         self.assertTrue(fake_pool_set_name_label.called)
