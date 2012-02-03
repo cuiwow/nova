@@ -1063,7 +1063,7 @@ def fixed_ip_disassociate(context, address):
         fixed_ip_ref = fixed_ip_get_by_address(context,
                                                address,
                                                session=session)
-        fixed_ip_ref.instance = None
+        fixed_ip_ref['instance_id'] = None
         fixed_ip_ref.save(session=session)
 
 
@@ -1822,11 +1822,16 @@ def instance_info_cache_update(context, instance_uuid, values,
     info_cache = instance_info_cache_get(context, instance_uuid,
                                          session=session)
 
-    values['updated_at'] = literal_column('updated_at')
-
     if info_cache:
         info_cache.update(values)
         info_cache.save(session=session)
+    else:
+        # NOTE(tr3buchet): just in case someone blows away an instance's
+        #                  cache entry
+        values['instance_id'] = instance_uuid
+        info_cache = \
+            instance_info_cache_create(context, values)
+
     return info_cache
 
 

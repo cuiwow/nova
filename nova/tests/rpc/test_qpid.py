@@ -186,7 +186,7 @@ class RpcQpidTestCase(test.TestCase):
 
             self.mocker.VerifyAll()
         finally:
-            if rpc_amqp.ConnectionContext._connection_pool.free():
+            while rpc_amqp.ConnectionContext._connection_pool.free_items:
                 # Pull the mock connection object out of the connection pool so
                 # that it doesn't mess up other test cases.
                 rpc_amqp.ConnectionContext._connection_pool.get()
@@ -221,21 +221,25 @@ class RpcQpidTestCase(test.TestCase):
         self.mock_session.sender(send_addr).AndReturn(self.mock_sender)
         self.mock_sender.send(mox.IgnoreArg())
 
-        self.mock_session.next_receiver().AndReturn(self.mock_receiver)
+        self.mock_session.next_receiver(timeout=mox.IsA(int)).AndReturn(
+                                                        self.mock_receiver)
         self.mock_receiver.fetch().AndReturn(qpid.messaging.Message(
                         {"result": "foo", "failure": False, "ending": False}))
         if multi:
-            self.mock_session.next_receiver().AndReturn(self.mock_receiver)
+            self.mock_session.next_receiver(timeout=mox.IsA(int)).AndReturn(
+                                                        self.mock_receiver)
             self.mock_receiver.fetch().AndReturn(
                             qpid.messaging.Message(
                                 {"result": "bar", "failure": False,
                                  "ending": False}))
-            self.mock_session.next_receiver().AndReturn(self.mock_receiver)
+            self.mock_session.next_receiver(timeout=mox.IsA(int)).AndReturn(
+                                                        self.mock_receiver)
             self.mock_receiver.fetch().AndReturn(
                             qpid.messaging.Message(
                                 {"result": "baz", "failure": False,
                                  "ending": False}))
-        self.mock_session.next_receiver().AndReturn(self.mock_receiver)
+        self.mock_session.next_receiver(timeout=mox.IsA(int)).AndReturn(
+                                                        self.mock_receiver)
         self.mock_receiver.fetch().AndReturn(qpid.messaging.Message(
                         {"failure": False, "ending": True}))
         self.mock_session.close()
@@ -261,7 +265,7 @@ class RpcQpidTestCase(test.TestCase):
 
             self.mocker.VerifyAll()
         finally:
-            if rpc_amqp.ConnectionContext._connection_pool.free():
+            while rpc_amqp.ConnectionContext._connection_pool.free_items:
                 # Pull the mock connection object out of the connection pool so
                 # that it doesn't mess up other test cases.
                 rpc_amqp.ConnectionContext._connection_pool.get()

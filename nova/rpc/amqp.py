@@ -127,6 +127,11 @@ class ConnectionContext(rpc_common.Connection):
         else:
             raise exception.InvalidRPCConnectionReuse()
 
+    @classmethod
+    def empty_pool(cls):
+        while cls._connection_pool.free_items:
+            cls._connection_pool.get().close()
+
 
 def msg_reply(msg_id, reply=None, failure=None, ending=False):
     """Sends a reply or an error on the channel signified by msg_id.
@@ -257,9 +262,10 @@ class ProxyCallback(object):
 
 
 class MulticallWaiter(object):
-    def __init__(self, connection):
+    def __init__(self, connection, timeout):
         self._connection = connection
-        self._iterator = connection.iterconsume()
+        self._iterator = connection.iterconsume(
+                                timeout=timeout or FLAGS.rpc_response_timeout)
         self._result = None
         self._done = False
         self._got_ending = False
@@ -302,7 +308,7 @@ def create_connection(new=True):
     return ConnectionContext(pooled=not new)
 
 
-def multicall(context, topic, msg):
+def multicall(context, topic, msg, timeout):
     """Make a call that returns multiple times."""
     # Can't use 'with' for multicall, as it returns an iterator
     # that will continue to use the connection.  When it's done,
@@ -315,15 +321,15 @@ def multicall(context, topic, msg):
     pack_context(msg, context)
 
     conn = ConnectionContext()
-    wait_msg = MulticallWaiter(conn)
+    wait_msg = MulticallWaiter(conn, timeout)
     conn.declare_direct_consumer(msg_id, wait_msg)
     conn.topic_send(topic, msg)
     return wait_msg
 
 
-def call(context, topic, msg):
+def call(context, topic, msg, timeout):
     """Sends a message on a topic and wait for a response."""
-    rv = multicall(context, topic, msg)
+    rv = multicall(context, topic, msg, timeout)
     # NOTE(vish): return the last result from the multicall
     rv = list(rv)
     if not rv:
@@ -353,3 +359,7 @@ def notify(context, topic, msg):
     pack_context(msg, context)
     with ConnectionContext() as conn:
         conn.notify_send(topic, msg)
+
+
+def cleanup():
+    ConnectionContext.empty_pool()
