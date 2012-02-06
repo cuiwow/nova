@@ -483,11 +483,12 @@ class XenAPIConnection(driver.ComputeDriver):
 
     def add_to_aggregate(self, context, aggregate, host, **kwargs):
         """Add a compute host to an aggregate."""
-        return self._pool.add_to_aggregate(context, aggregate, host)
+        return self._pool.add_to_aggregate(context, aggregate, host, **kwargs)
 
     def remove_from_aggregate(self, context, aggregate, host, **kwargs):
         """Remove a compute host from an aggregate."""
-        return self._pool.remove_from_aggregate(context, aggregate, host)
+        return self._pool.remove_from_aggregate(context,
+                                                aggregate, host, **kwargs)
 
 
 class XenAPISession(object):

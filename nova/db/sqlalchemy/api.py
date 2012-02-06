@@ -4266,7 +4266,8 @@ def aggregate_create(context, values, metadata=None):
     try:
         aggregate = models.Aggregate()
         aggregate.update(values)
-        aggregate.operational_state = aggregate_states.CREATED
+        if 'operational_state' not in values:
+            aggregate.operational_state = aggregate_states.CREATED
         aggregate.save()
     except exception.DBError:
         raise exception.AggregateNameExists(aggregate_name=values['name'])

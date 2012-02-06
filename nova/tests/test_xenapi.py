@@ -1750,32 +1750,44 @@ class XenAPIAggregateTestCase(test.TestCase):
         self.conn.add_to_aggregate(None, None, None)
         self.assertTrue(fake_add_to_aggregate.called)
 
-    def test_remove_from_aggregate_called(self):
-        def fake_remove_from_aggregate(context, aggregate, host):
-            fake_remove_from_aggregate.called = True
-        self.stubs.Set(self.conn._pool,
-                       "remove_from_aggregate",
-                       fake_remove_from_aggregate)
+    def test_add_master(self):
+        """Ensure that metadata are set correctly."""
+        def fake_init_pool(id, name):
+            fake_init_pool.called = True
+        self.stubs.Set(self.conn._pool, "_init_pool", fake_init_pool)
 
-        self.conn.remove_from_aggregate(None, None, None)
-        self.assertTrue(fake_remove_from_aggregate.called)
+        aggregate = self._aggregate_setup()
+        self.conn._pool.add_to_aggregate(self.context, aggregate, "host")
+        result = db.aggregate_get(self.context, aggregate.id)
+        expected = {'master_password': 'test_pass',
+                    'master_compute': 'host',
+                    'master_address': '127.0.0.1',
+                    'master_username': 'root',
+                    'master_hostname': 'fake_name', }
+        self.assertTrue(fake_init_pool.called)
+        self.assertDictMatch(expected, result.metadetails)
+        self.assertEqual(aggregate_states.ACTIVE, result.operational_state)
 
-    def test_remove_from_aggregate(self):
-        def fake_pool_eject(self, session, host_ref):
-            fake_pool_eject.called = True
-        self.stubs.Set(xenapi_fake.SessionBase, "pool_eject",
-                       fake_pool_eject)
+    def test_join_slave(self):
+        """Ensure join_slave gets called when the request gets to master."""
+        def fake_join_slave(id, compute_uuid, url, user, password):
+            fake_join_slave.called = True
+        self.stubs.Set(self.conn._pool, "_join_slave", fake_join_slave)
 
-        self.conn._pool.remove_from_aggregate(None, None, "test_host")
-        self.assertTrue(fake_pool_eject.called)
-    
-    def test_remove_from_empty_aggregate(self):
-        values = {"name": 'fake_aggregate',
-                  "availability_zone": 'fake_zone'}
-        result = db.aggregate_create(self.context, values)
-        self.assertRaises(exception.AggregateError,
-                          self.conn._pool.remove_from_aggregate,
-                          None, result, "test_host")
+        self.flags(host='fake_host')
+        metadata = {'master_password': 'fake_pass',
+                    'master_compute': 'fake_host',
+                    'master_address': '127.0.0.1',
+                    'master_username': 'fake_root',
+                    'master_hostname': 'fake_name', }
+        aggregate = self._aggregate_setup(hosts=['host', 'host2'],
+                                          metadata=metadata)
+        self.conn._pool.add_to_aggregate(self.context, aggregate, "host2",
+                                         compute_uuid='fake_uuid',
+                                         url='fake_url',
+                                         user='fake_user',
+                                         passwd='fake_pass')
+        self.assertTrue(fake_join_slave.called)
 
     def test_add_to_aggregate_first_host(self):
         def fake_pool_set_name_label(self, session, pool_ref, name):
@@ -1794,3 +1806,90 @@ class XenAPIAggregateTestCase(test.TestCase):
 
         self.conn._pool.add_to_aggregate(self.context, aggregate, "host")
         self.assertTrue(fake_pool_set_name_label.called)
+
+    def test_remove_from_aggregate_called(self):
+        def fake_remove_from_aggregate(context, aggregate, host):
+            fake_remove_from_aggregate.called = True
+        self.stubs.Set(self.conn._pool,
+                       "remove_from_aggregate",
+                       fake_remove_from_aggregate)
+
+        self.conn.remove_from_aggregate(None, None, None)
+        self.assertTrue(fake_remove_from_aggregate.called)
+
+    def test_remove_from_empty_aggregate(self):
+        values = {"name": 'fake_aggregate',
+                  "availability_zone": 'fake_zone'}
+        result = db.aggregate_create(self.context, values)
+        self.assertRaises(exception.AggregateError,
+                          self.conn._pool.remove_from_aggregate,
+                          None, result, "test_host")
+
+    def test_remove_slave(self):
+        """Ensure eject slave gets called."""
+        def fake_eject_slave(id):
+            fake_eject_slave.called = True
+        self.stubs.Set(self.conn._pool, "_eject_slave", fake_eject_slave)
+
+        self.flags(host='fake_host')
+        metadata = {'master_password': 'fake_pass',
+                    'master_compute': 'fake_host',
+                    'master_address': '127.0.0.1',
+                    'master_username': 'fake_root',
+                    'master_hostname': 'fake_name', }
+        aggregate = self._aggregate_setup(hosts=['host', 'host2'],
+                                          metadata=metadata)
+        self.conn._pool.remove_from_aggregate(self.context, aggregate, "host2")
+        self.assertTrue(fake_eject_slave.called)
+
+    def test_remove_master_solo(self):
+        """Ensure metadata are cleared after removal."""
+        def fake_clear_pool(id):
+            fake_clear_pool.called = True
+        self.stubs.Set(self.conn._pool, "_clear_pool", fake_clear_pool)
+
+        self.flags(host='fake_host')
+        metadata = {'master_password': 'fake_pass',
+                    'master_compute': 'host',
+                    'master_address': '127.0.0.1',
+                    'master_username': 'fake_root',
+                    'master_hostname': 'fake_name', }
+        aggregate = self._aggregate_setup(aggr_state=aggregate_states.ACTIVE,
+                                          metadata=metadata)
+        self.conn._pool.remove_from_aggregate(self.context, aggregate, "host")
+        result = db.aggregate_get(self.context, aggregate.id)
+        self.assertTrue(fake_clear_pool.called)
+        self.assertDictMatch({}, result.metadetails)
+        self.assertEqual(aggregate_states.ACTIVE, result.operational_state)
+
+    def test_remote_master_non_empty(self):
+        """Ensure AggregateError is raised if removing the master."""
+        def fake_clear_pool_raise(id):
+            raise exception.AggregateError()
+        self.stubs.Set(self.conn._pool, "_clear_pool", fake_clear_pool_raise)
+
+        self.flags(host='fake_host')
+        metadata = {'master_password': 'fake_pass',
+                    'master_compute': 'host',
+                    'master_address': '127.0.0.1',
+                    'master_username': 'fake_root',
+                    'master_hostname': 'fake_name', }
+        aggregate = self._aggregate_setup(aggr_state=aggregate_states.ACTIVE,
+                                          metadata=metadata)
+        self.assertRaises(exception.AggregateError,
+                          self.conn._pool.remove_from_aggregate,
+                          self.context, aggregate, "host")
+
+    def _aggregate_setup(self, aggr_name='fake_aggregate',
+                         aggr_zone='fake_zone',
+                         aggr_state=aggregate_states.CREATED,
+                         hosts=['host'], metadata=None):
+        values = {"name": aggr_name,
+                  "availability_zone": aggr_zone,
+                  "operational_state": aggr_state, }
+        result = db.aggregate_create(self.context, values)
+        for host in hosts:
+            db.aggregate_host_add(self.context, result.id, host)
+        if metadata:
+            db.aggregate_metadata_add(self.context, result.id, metadata)
+        return db.aggregate_get(self.context, result.id)

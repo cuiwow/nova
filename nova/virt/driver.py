@@ -613,7 +613,7 @@ class ComputeDriver(object):
     def remove_from_aggregate(self, context, aggregate, host, **kwargs):
         """Remove a compute host from an aggregate."""
         raise NotImplementedError()
-    
+
     def legacy_nwinfo(self):
         """
         Indicate if the driver requires the legacy network_info format.
