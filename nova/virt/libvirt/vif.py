@@ -19,11 +19,11 @@
 
 """VIF drivers for libvirt."""
 
-from nova.common import cfg
 from nova import exception
 from nova import flags
 from nova import log as logging
 from nova.network import linux_net
+from nova.openstack.common import cfg
 from nova import utils
 from nova.virt import netutils
 from nova.virt.vif import VIFDriver
@@ -82,13 +82,14 @@ class LibvirtBridgeDriver(VIFDriver):
         if (not network.get('multi_host') and
             mapping.get('should_create_bridge')):
             if mapping.get('should_create_vlan'):
+                iface = FLAGS.vlan_interface or network['bridge_interface']
                 LOG.debug(_('Ensuring vlan %(vlan)s and bridge %(bridge)s'),
                           {'vlan': network['vlan'],
                            'bridge': network['bridge']})
                 linux_net.LinuxBridgeInterfaceDriver.ensure_vlan_bridge(
                                              network['vlan'],
                                              network['bridge'],
-                                             network['bridge_interface'])
+                                             iface)
             else:
                 LOG.debug(_("Ensuring bridge %s"), network['bridge'])
                 linux_net.LinuxBridgeInterfaceDriver.ensure_bridge(

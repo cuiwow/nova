@@ -906,6 +906,7 @@ class Aggregate(BASE, NovaBase):
                                  'Aggregate.deleted == False)',
                          secondaryjoin='and_('
                                 'AggregateHost.aggregate_id == Aggregate.id, '
+                                'AggregateHost.deleted == False,'
                                 'Aggregate.deleted == False)',
                          backref='aggregates')
 
@@ -917,6 +918,7 @@ class Aggregate(BASE, NovaBase):
                              'Aggregate.deleted == False)',
                          secondaryjoin='and_('
                              'AggregateMetadata.aggregate_id == Aggregate.id, '
+                             'AggregateMetadata.deleted == False,'
                              'Aggregate.deleted == False)',
                          backref='aggregates')
 
@@ -946,7 +948,7 @@ class BandwidthUsage(BASE, NovaBase):
     __tablename__ = 'bw_usage_cache'
     id = Column(Integer, primary_key=True, nullable=False)
     instance_id = Column(Integer, nullable=False)
-    network_label = Column(String(255))
+    mac = Column(String(255), nullable=False)
     start_period = Column(DateTime, nullable=False)
     last_refreshed = Column(DateTime)
     bw_in = Column(BigInteger)
@@ -1005,21 +1007,39 @@ def register_models():
     connection is lost and needs to be reestablished.
     """
     from sqlalchemy import create_engine
-    models = (AgentBuild, Aggregate, AggregateHost, AggregateMetadata,
+    models = (AgentBuild,
+              Aggregate,
+              AggregateHost,
+              AggregateMetadata,
               AuthToken,
-              Certificate, Console, ConsolePool,
-              FixedIp, FloatingIp,
-              Instance, InstanceActions, InstanceFault, InstanceMetadata,
-              InstanceTypeExtraSpecs, InstanceTypes, IscsiTarget,
+              Certificate,
+              Console,
+              ConsolePool,
+              FixedIp,
+              FloatingIp,
+              Instance,
+              InstanceActions,
+              InstanceFault,
+              InstanceMetadata,
+              InstanceTypeExtraSpecs,
+              InstanceTypes,
+              IscsiTarget,
               Migration,
               Network,
               Project,
-              SecurityGroup, SecurityGroupIngressRule,
-              SecurityGroupInstanceAssociation, Service, SMBackendConf,
-              SMFlavors, SMVolume,
+              SecurityGroup,
+              SecurityGroupIngressRule,
+              SecurityGroupInstanceAssociation,
+              Service,
+              SMBackendConf,
+              SMFlavors,
+              SMVolume,
               User,
-              VirtualStorageArray, Volume, VolumeMetadata,
-              VolumeTypeExtraSpecs, VolumeTypes,
+              VirtualStorageArray,
+              Volume,
+              VolumeMetadata,
+              VolumeTypeExtraSpecs,
+              VolumeTypes,
               Zone,)
     engine = create_engine(FLAGS.sql_connection, echo=False)
     for model in models:

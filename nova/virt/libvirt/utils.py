@@ -23,9 +23,9 @@ import os
 import random
 import shutil
 
-from nova.common import cfg
 from nova import exception
 from nova import flags
+from nova.openstack.common import cfg
 from nova import utils
 from nova.virt.disk import api as disk
 from nova.virt import images
@@ -42,6 +42,16 @@ FLAGS.add_option(qemu_img_opt)
 
 def execute(*args, **kwargs):
     return utils.execute(*args, **kwargs)
+
+
+def get_iscsi_initiator():
+    """Get iscsi initiator name for this machine"""
+    # NOTE(vish) openiscsi stores initiator name in a file that
+    #            needs root permission to read.
+    contents = utils.read_file_as_root('/etc/iscsi/initiatorname.iscsi')
+    for l in contents.split('\n'):
+        if l.startswith('InitiatorName='):
+            return l[l.index('=') + 1:].strip()
 
 
 def create_image(disk_format, path, size):

@@ -17,11 +17,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from nova.common import cfg
 from nova import context
 from nova import db
 from nova import flags
 from nova import log as logging
+from nova.openstack.common import cfg
 from nova import utils
 from nova.virt import netutils
 
@@ -135,7 +135,7 @@ class IptablesFirewallDriver(FirewallDriver):
         self.instances[instance['id']] = instance
         self.network_infos[instance['id']] = network_info
         self.add_filters_for_instance(instance)
-        LOG.debug(_('Filters added to the instance: %r'), instance)
+        LOG.debug(_('Filters added to instance %s'), instance['uuid'])
         self.refresh_provider_fw_rules()
         LOG.debug(_('Provider Firewall Rules refreshed'))
         self.iptables.apply()

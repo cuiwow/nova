@@ -43,9 +43,9 @@ these objects be simple dictionaries.
 
 """
 
-from nova.common import cfg
 from nova import exception
 from nova import flags
+from nova.openstack.common import cfg
 from nova import utils
 
 
@@ -1549,14 +1549,14 @@ def bw_usage_get_all_by_filters(context, filters):
 
 def bw_usage_update(context,
                     instance_id,
-                    network_label,
+                    mac,
                     start_period,
                     bw_in, bw_out):
     """Update cached bw usage for an instance and network
        Creates new record if needed."""
     return IMPL.bw_usage_update(context,
                                 instance_id,
-                                network_label,
+                                mac,
                                 start_period,
                                 bw_in, bw_out)
 

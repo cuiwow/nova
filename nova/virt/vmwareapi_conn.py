@@ -36,12 +36,12 @@ import time
 
 from eventlet import event
 
-from nova.common import cfg
 from nova import context
 from nova import db
 from nova import exception
 from nova import flags
 from nova import log as logging
+from nova.openstack.common import cfg
 from nova import utils
 from nova.virt import driver
 from nova.virt.vmwareapi import error_util
@@ -177,6 +177,15 @@ class VMWareESXConnection(driver.ComputeDriver):
     def get_ajax_console(self, instance):
         """Return link to instance's ajax console."""
         return self._vmops.get_ajax_console(instance)
+
+    def get_volume_connector(self, _instance):
+        """Return volume connector information"""
+        # TODO(vish): When volume attaching is supported, return the
+        #             proper initiator iqn.
+        return {
+            'ip': FLAGS.vmwareapi_host_ip,
+            'initiator': None
+        }
 
     def attach_volume(self, connection_info, instance_name, mountpoint):
         """Attach volume storage to VM instance."""

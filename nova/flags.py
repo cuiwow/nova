@@ -32,7 +32,7 @@ import sys
 
 import gflags
 
-from nova.common import cfg
+from nova.openstack.common import cfg
 
 
 class FlagValues(object):
@@ -338,6 +338,14 @@ global_opts = [
     cfg.StrOpt('osapi_path',
                default='/v1.1/',
                help='suffix for openstack'),
+    cfg.StrOpt('osapi_compute_link_prefix',
+               default=None,
+               help='Base URL that will be presented to users in links '
+                    'to the Openstack Compute API'),
+    cfg.StrOpt('osapi_glance_link_prefix',
+               default=None,
+               help='Base URL that will be presented to users in links '
+                    'to glance resources'),
     cfg.IntOpt('osapi_max_limit',
                default=1000,
                help='max number of items returned in a collection response'),
@@ -442,7 +450,7 @@ global_opts = [
                default=100,
                help='default partition size for shared capacity'),
     cfg.StrOpt('firewall_driver',
-               default='nova.virt.libvirt.firewall.IptablesFirewallDriver',
+               default='nova.virt.firewall.IptablesFirewallDriver',
                help='Firewall driver (defaults to iptables)'),
     cfg.StrOpt('image_service',
                default='nova.image.glance.GlanceImageService',

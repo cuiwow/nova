@@ -85,7 +85,7 @@ class AggregateController(object):
         try:
             aggregate = self.api.get_aggregate(context, id)
         except exception.AggregateNotFound:
-            LOG.exception(_("Cannot show aggregate: %(id)s" % locals()))
+            LOG.exception(_("Cannot show aggregate: %(id)s") % locals())
             raise exc.HTTPNotFound
         return self._marshall_aggregate(aggregate)
 
@@ -111,7 +111,7 @@ class AggregateController(object):
         try:
             aggregate = self.api.update_aggregate(context, id, updates)
         except exception.AggregateNotFound:
-            LOG.exception(_("Cannot update aggregate: %(id)s" % locals()))
+            LOG.exception(_("Cannot update aggregate: %(id)s") % locals())
             raise exc.HTTPNotFound
 
         return self._marshall_aggregate(aggregate)
@@ -123,7 +123,7 @@ class AggregateController(object):
         try:
             self.api.delete_aggregate(context, id)
         except exception.AggregateNotFound:
-            LOG.exception(_("Cannot delete aggregate: %(id)s" % locals()))
+            LOG.exception(_("Cannot delete aggregate: %(id)s") % locals())
             raise exc.HTTPNotFound
 
     def action(self, req, id, body):
@@ -150,13 +150,13 @@ class AggregateController(object):
             aggregate = self.api.add_host_to_aggregate(context, id, host)
         except (exception.AggregateNotFound, exception.ComputeHostNotFound):
             LOG.exception(_("Cannot add host %(host)s in aggregate "
-                            "%(id)s" % locals()))
+                            "%(id)s") % locals())
             raise exc.HTTPNotFound
         except (exception.AggregateHostConflict,
                 exception.AggregateHostExists,
                 exception.InvalidAggregateAction):
             LOG.exception(_("Cannot add host %(host)s in aggregate "
-                            "%(id)s" % locals()))
+                            "%(id)s") % locals())
             raise exc.HTTPConflict
         return self._marshall_aggregate(aggregate)
 
@@ -169,11 +169,11 @@ class AggregateController(object):
             aggregate = self.api.remove_host_from_aggregate(context, id, host)
         except (exception.AggregateNotFound, exception.AggregateHostNotFound):
             LOG.exception(_("Cannot remove host %(host)s in aggregate "
-                            "%(id)s" % locals()))
+                            "%(id)s") % locals())
             raise exc.HTTPNotFound
         except exception.InvalidAggregateAction:
             LOG.exception(_("Cannot remove host %(host)s in aggregate "
-                "%(id)s" % locals()))
+                "%(id)s") % locals())
             raise exc.HTTPConflict
         return self._marshall_aggregate(aggregate)
 
@@ -193,7 +193,7 @@ class AggregateController(object):
                                                            id, metadata)
         except exception.AggregateNotFound:
             LOG.exception(_("Cannot set metadata %(metadata)s in aggregate "
-                            "%(id)s" % locals()))
+                            "%(id)s") % locals())
             raise exc.HTTPNotFound
 
         return self._marshall_aggregate(aggregate)

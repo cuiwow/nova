@@ -400,14 +400,7 @@ class XenAPIVMTestCase(test.TestCase):
     def _check_vdis(self, start_list, end_list):
         for vdi_ref in end_list:
             if not vdi_ref in start_list:
-                vdi_rec = xenapi_fake.get_record('VDI', vdi_ref)
-                # If the cache is turned on then the base disk will be
-                # there even after the cleanup
-                if 'other_config' in vdi_rec:
-                    if vdi_rec['other_config']['image-id'] is None:
-                        self.fail('Found unexpected VDI:%s' % vdi_ref)
-                else:
-                    self.fail('Found unexpected VDI:%s' % vdi_ref)
+                self.fail('Found unexpected VDI:%s' % vdi_ref)
 
     def _test_spawn(self, image_ref, kernel_id, ramdisk_id,
                     instance_type_id="3", os_type="linux",
@@ -1735,6 +1728,12 @@ class XenAPIAggregateTestCase(test.TestCase):
         stubs.stubout_session(self.stubs, stubs.FakeSessionForVMTests)
         self.context = context.get_admin_context()
         self.conn = xenapi_conn.get_connection(False)
+        self.flags(host='host')
+        self.fake_metadata = {'master_password': 'test_pass',
+                              'master_compute': 'host',
+                              'master_address': '127.0.0.1',
+                              'master_username': 'root',
+                              'master_hostname': 'fake_name', }
 
     def tearDown(self):
         super(XenAPIAggregateTestCase, self).tearDown()
@@ -1750,8 +1749,7 @@ class XenAPIAggregateTestCase(test.TestCase):
         self.conn.add_to_aggregate(None, None, None)
         self.assertTrue(fake_add_to_aggregate.called)
 
-    def test_add_master(self):
-        """Ensure that metadata are set correctly."""
+    def test_add_to_aggregate_for_first_host_sets_metadata(self):
         def fake_init_pool(id, name):
             fake_init_pool.called = True
         self.stubs.Set(self.conn._pool, "_init_pool", fake_init_pool)
@@ -1759,29 +1757,18 @@ class XenAPIAggregateTestCase(test.TestCase):
         aggregate = self._aggregate_setup()
         self.conn._pool.add_to_aggregate(self.context, aggregate, "host")
         result = db.aggregate_get(self.context, aggregate.id)
-        expected = {'master_password': 'test_pass',
-                    'master_compute': 'host',
-                    'master_address': '127.0.0.1',
-                    'master_username': 'root',
-                    'master_hostname': 'fake_name', }
         self.assertTrue(fake_init_pool.called)
-        self.assertDictMatch(expected, result.metadetails)
+        self.assertDictMatch(self.fake_metadata, result.metadetails)
         self.assertEqual(aggregate_states.ACTIVE, result.operational_state)
 
     def test_join_slave(self):
         """Ensure join_slave gets called when the request gets to master."""
-        def fake_join_slave(id, compute_uuid, url, user, password):
+        def fake_join_slave(id, compute_uuid, host, url, user, password):
             fake_join_slave.called = True
         self.stubs.Set(self.conn._pool, "_join_slave", fake_join_slave)
 
-        self.flags(host='fake_host')
-        metadata = {'master_password': 'fake_pass',
-                    'master_compute': 'fake_host',
-                    'master_address': '127.0.0.1',
-                    'master_username': 'fake_root',
-                    'master_hostname': 'fake_name', }
         aggregate = self._aggregate_setup(hosts=['host', 'host2'],
-                                          metadata=metadata)
+                                          metadata=self.fake_metadata)
         self.conn._pool.add_to_aggregate(self.context, aggregate, "host2",
                                          compute_uuid='fake_uuid',
                                          url='fake_url',
@@ -1831,14 +1818,8 @@ class XenAPIAggregateTestCase(test.TestCase):
             fake_eject_slave.called = True
         self.stubs.Set(self.conn._pool, "_eject_slave", fake_eject_slave)
 
-        self.flags(host='fake_host')
-        metadata = {'master_password': 'fake_pass',
-                    'master_compute': 'fake_host',
-                    'master_address': '127.0.0.1',
-                    'master_username': 'fake_root',
-                    'master_hostname': 'fake_name', }
         aggregate = self._aggregate_setup(hosts=['host', 'host2'],
-                                          metadata=metadata)
+                                          metadata=self.fake_metadata)
         self.conn._pool.remove_from_aggregate(self.context, aggregate, "host2")
         self.assertTrue(fake_eject_slave.called)
 
@@ -1848,14 +1829,8 @@ class XenAPIAggregateTestCase(test.TestCase):
             fake_clear_pool.called = True
         self.stubs.Set(self.conn._pool, "_clear_pool", fake_clear_pool)
 
-        self.flags(host='fake_host')
-        metadata = {'master_password': 'fake_pass',
-                    'master_compute': 'host',
-                    'master_address': '127.0.0.1',
-                    'master_username': 'fake_root',
-                    'master_hostname': 'fake_name', }
         aggregate = self._aggregate_setup(aggr_state=aggregate_states.ACTIVE,
-                                          metadata=metadata)
+                                          metadata=self.fake_metadata)
         self.conn._pool.remove_from_aggregate(self.context, aggregate, "host")
         result = db.aggregate_get(self.context, aggregate.id)
         self.assertTrue(fake_clear_pool.called)
@@ -1868,14 +1843,8 @@ class XenAPIAggregateTestCase(test.TestCase):
             raise exception.AggregateError()
         self.stubs.Set(self.conn._pool, "_clear_pool", fake_clear_pool_raise)
 
-        self.flags(host='fake_host')
-        metadata = {'master_password': 'fake_pass',
-                    'master_compute': 'host',
-                    'master_address': '127.0.0.1',
-                    'master_username': 'fake_root',
-                    'master_hostname': 'fake_name', }
         aggregate = self._aggregate_setup(aggr_state=aggregate_states.ACTIVE,
-                                          metadata=metadata)
+                                          metadata=self.fake_metadata)
         self.assertRaises(exception.AggregateError,
                           self.conn._pool.remove_from_aggregate,
                           self.context, aggregate, "host")
@@ -1893,3 +1862,4 @@ class XenAPIAggregateTestCase(test.TestCase):
         if metadata:
             db.aggregate_metadata_add(self.context, result.id, metadata)
         return db.aggregate_get(self.context, result.id)
+

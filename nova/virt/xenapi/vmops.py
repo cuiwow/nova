@@ -32,7 +32,6 @@ import uuid
 
 from eventlet import greenthread
 
-from nova.common import cfg
 from nova.compute import api as compute
 from nova.compute import power_state
 from nova import context as nova_context
@@ -41,12 +40,15 @@ from nova import exception
 from nova import flags
 from nova import log as logging
 from nova import rpc
+from nova.openstack.common import cfg
 from nova import utils
 from nova.virt import driver
-from nova.virt.xenapi import volume_utils
+from nova.virt.xenapi import firewall
 from nova.virt.xenapi import network_utils
 from nova.virt.xenapi import vm_utils
 from nova.virt.xenapi.vm_utils import ImageType
+from nova.virt.xenapi import volume_utils
+
 
 VolumeHelper = volume_utils.VolumeHelper
 NetworkHelper = network_utils.NetworkHelper
@@ -107,6 +109,8 @@ class VMOps(object):
         self._session = session
         self.poll_rescue_last_ran = None
         VMHelper.XenAPI = self.XenAPI
+        if FLAGS.firewall_driver not in firewall.drivers:
+            FLAGS['firewall_driver'].SetDefault(firewall.drivers[0])
         fw_class = utils.import_class(FLAGS.firewall_driver)
         self.firewall_driver = fw_class(xenapi_session=self._session)
         vif_impl = utils.import_class(FLAGS.xenapi_vif_driver)
@@ -655,7 +659,7 @@ class VMOps(object):
         #TODO(sirp): Add quiesce and VSS locking support when Windows support
         # is added
 
-        logging.debug(_("Starting snapshot for VM %s"), instance)
+        logging.debug(_("Starting snapshot for VM %s"), instance['uuid'])
         vm_ref = VMHelper.lookup(self._session, instance.name)
 
         label = "%s-snapshot" % instance.name

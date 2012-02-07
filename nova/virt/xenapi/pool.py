@@ -27,16 +27,16 @@ from nova import exception
 from nova import flags
 from nova import log as logging
 from nova import rpc
-from nova.common import cfg
 from nova.compute import aggregate_states
+from nova.openstack.common import cfg
 from nova.virt.xenapi import vm_utils
 
 LOG = logging.getLogger("nova.virt.xenapi.pool")
 
 xenapi_pool_opts = [
     cfg.BoolOpt('use_join_force',
-               default=True,
-               help='To use for hosts with different CPUs'),
+                default=True,
+                help='To use for hosts with different CPUs'),
     ]
 
 FLAGS = flags.FLAGS
@@ -116,8 +116,8 @@ class ResourcePool(object):
             # this shouldn't have happened
             raise exception.AggregateError(aggregate_id=aggregate.id,
                                            action='remove_from_aggregate',
-                                           reason='Unable to eject %(host)s '
-                                           'from the pool; No master found'
+                                           reason=_('Unable to eject %(host)s '
+                                           'from the pool; No master found')
                                            % locals())
 
     def _join_slave(self, aggregate_id, host, compute_uuid, url, user, passwd):
@@ -138,8 +138,8 @@ class ResourcePool(object):
             LOG.error(_("Pool-Join failed: %(e)s") % locals())
             raise exception.AggregateError(aggregate_id=aggregate_id,
                                            action='add_to_aggregate',
-                                           reason='Unable to join %(host)s '
-                                                  'in the pool' % locals())
+                                           reason=_('Unable to join %(host)s '
+                                                  'in the pool') % locals())
 
     def _eject_slave(self, aggregate_id):
         """Eject a slave from a XenServer resource pool."""
@@ -171,8 +171,8 @@ class ResourcePool(object):
             LOG.error(_("Pool-eject failed: %(e)s") % locals())
             raise exception.AggregateError(aggregate_id=aggregate_id,
                                            action='remove_from_aggregate',
-                                           reason='Unable to eject %(host)s '
-                                              'from the pool; pool not empty'
+                                           reason=_('Unable to eject %(host)s '
+                                              'from the pool; pool not empty')
                                               % locals())
 
 
@@ -180,12 +180,8 @@ def forward_request(context, request_type, master,
                     aggregate_id, slave_compute, slave_address):
     """Casts add/remove requests to the pool master."""
     # replace the address from the xenapi connection url
-    # because this might be 169.254.0.2, i.e. xapi0
-    url = urlparse.urlparse(FLAGS.xenapi_connection_url)
-    _, sep, port = url.netloc.partition(':')
-    sender_url = FLAGS.xenapi_connection_url.replace(url.netloc, '%s%s%s'
-                                                     % (slave_address,
-                                                        sep, port))
+    # because this might be 169.254.0.1, i.e. xenapi
+    sender_url = swap_xapi_host(FLAGS.xenapi_connection_url, slave_address)
     rpc.cast(context, db.queue_get_for(context, FLAGS.compute_topic, master),
              {"method": request_type,
               "args": {"aggregate_id": aggregate_id,
@@ -195,3 +191,10 @@ def forward_request(context, request_type, master,
                        "passwd": FLAGS.xenapi_connection_password,
                        "compute_uuid": vm_utils.get_this_vm_uuid(), },
              })
+
+
+def swap_xapi_host(url, host_addr):
+    temp_url = urlparse.urlparse(url)
+    _, sep, port = temp_url.netloc.partition(':')
+    return url.replace(url.netloc, '%s%s%s' % (host_addr, sep, port))
+

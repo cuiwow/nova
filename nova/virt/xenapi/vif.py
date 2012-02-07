@@ -19,9 +19,9 @@
 
 """VIF drivers for XenAPI."""
 
-from nova.common import cfg
 from nova import flags
 from nova import log as logging
+from nova.openstack.common import cfg
 from nova.virt.vif import VIFDriver
 from nova.virt.xenapi.network_utils import NetworkHelper
 from nova.virt.xenapi.vm_utils import VMHelper
@@ -77,7 +77,7 @@ class XenAPIBridgeDriver(XenVIFDriver):
 
         vlan_num = network['vlan']
         bridge = network['bridge']
-        bridge_interface = network['bridge_interface']
+        bridge_interface = FLAGS.vlan_interface or network['bridge_interface']
         # Check whether bridge already exists
         # Retrieve network whose name_label is "bridge"
         network_ref = NetworkHelper.find_network_with_name_label(

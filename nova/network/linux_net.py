@@ -24,11 +24,11 @@ import inspect
 import netaddr
 import os
 
-from nova.common import cfg
 from nova import db
 from nova import exception
 from nova import flags
 from nova import log as logging
+from nova.openstack.common import cfg
 from nova import utils
 
 
@@ -944,10 +944,11 @@ class LinuxBridgeInterfaceDriver(LinuxNetInterfaceDriver):
 
     def plug(self, network, mac_address, gateway=True):
         if network.get('vlan', None) is not None:
+            iface = FLAGS.vlan_interface or network['bridge_interface']
             LinuxBridgeInterfaceDriver.ensure_vlan_bridge(
                            network['vlan'],
                            network['bridge'],
-                           network['bridge_interface'],
+                           iface,
                            network,
                            mac_address)
         else:

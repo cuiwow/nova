@@ -33,11 +33,11 @@ import uuid
 from decimal import Decimal, InvalidOperation
 from xml.dom import minidom
 
-from nova.common import cfg
 from nova import exception
 from nova import flags
 from nova.image import glance
 from nova import log as logging
+from nova.openstack.common import cfg
 from nova import utils
 from nova.compute import instance_types
 from nova.compute import power_state
@@ -541,7 +541,7 @@ class VMHelper(HelperBase):
         # NOTE(jk0): We use a FAT32 filesystem for the Windows swap
         # partition because that is what parted supports.
         is_windows = instance.os_type == "windows"
-        fs_type = "fat32" if is_windows else "linux-swap"
+        fs_type = "vfat" if is_windows else "linux-swap"
 
         cls._generate_disk(session, instance, vm_ref, userdevice,
                            'swap', swap_mb, fs_type)
