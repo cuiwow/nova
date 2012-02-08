@@ -3356,6 +3356,24 @@ class ComputeAggrTestCase(BaseTestCase):
         self.compute.add_aggregate_host(self.context, self.aggr.id, "host")
         self.assertTrue(fake_driver_add_to_aggregate.called)
 
+    def test_add_aggregate_host_raise_err(self):
+        """Ensure the undo operation works correctly on add."""
+        def fake_driver_add_to_aggregate(context, aggregate, host):
+            raise exception.AggregateError
+        self.stubs.Set(self.compute.driver, "add_to_aggregate",
+                       fake_driver_add_to_aggregate)
+
+        state = {'operational_state': aggregate_states.ACTIVE}
+        db.aggregate_update(self.context, self.aggr.id, state)
+        db.aggregate_host_add(self.context, self.aggr.id, 'fake_host')
+
+        self.assertRaises(exception.AggregateError,
+                          self.compute.add_aggregate_host,
+                          self.context, self.aggr.id, "fake_host")
+        excepted = db.aggregate_get(self.context, self.aggr.id)
+        self.assertEqual(excepted.operational_state, aggregate_states.ERROR)
+        self.assertEqual(excepted.hosts, [])
+
     def test_remove_aggregate_host(self):
         def fake_driver_remove_from_aggregate(context, aggregate, host):
             fake_driver_remove_from_aggregate.called = True
@@ -3366,6 +3384,23 @@ class ComputeAggrTestCase(BaseTestCase):
 
         self.compute.remove_aggregate_host(self.context, self.aggr.id, "host")
         self.assertTrue(fake_driver_remove_from_aggregate.called)
+
+    def test_remove_aggregate_host_raise_err(self):
+        """Ensure the undo operation works correctly on remove."""
+        def fake_driver_remove_from_aggregate(context, aggregate, host):
+            raise exception.AggregateError
+        self.stubs.Set(self.compute.driver, "remove_from_aggregate",
+                       fake_driver_remove_from_aggregate)
+
+        state = {'operational_state': aggregate_states.ACTIVE}
+        db.aggregate_update(self.context, self.aggr.id, state)
+
+        self.assertRaises(exception.AggregateError,
+                          self.compute.remove_aggregate_host,
+                          self.context, self.aggr.id, "fake_host")
+        excepted = db.aggregate_get(self.context, self.aggr.id)
+        self.assertEqual(excepted.operational_state, aggregate_states.ERROR)
+        self.assertEqual(excepted.hosts, ['fake_host'])
 
 
 class ComputePolicyTestCase(BaseTestCase):

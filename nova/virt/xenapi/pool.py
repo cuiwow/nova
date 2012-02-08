@@ -203,7 +203,7 @@ def forward_request(context, request_type, master, aggregate_id,
                        "user": FLAGS.xenapi_connection_username,
                        "passwd": FLAGS.xenapi_connection_password,
                        "compute_uuid": vm_utils.get_this_vm_uuid(),
-                       "xenhost_uuid": slave_uuid },
+                       "xenhost_uuid": slave_uuid, },
              })
 
 

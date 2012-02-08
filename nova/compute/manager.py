@@ -2282,10 +2282,11 @@ class ComputeManager(manager.SchedulerDependentManager):
         try:
             self.driver.add_to_aggregate(context, aggregate, host, **kwargs)
         except exception.AggregateError:
-            status = {'operational_state': aggregate_states.ERROR}
-            self.db.aggregate_update(context, aggregate.id, status)
-            self.db.aggregate_host_delete(context, aggregate_id, host)
-            raise
+            error = sys.exc_info()
+            self._undo_aggregate_operation(context,
+                                           self.db.aggregate_host_delete,
+                                           aggregate.id, host)
+            raise error[0], error[1], error[2]
 
     @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
     def remove_aggregate_host(self, context, aggregate_id, host, **kwargs):
@@ -2295,10 +2296,19 @@ class ComputeManager(manager.SchedulerDependentManager):
             self.driver.remove_from_aggregate(context,
                                               aggregate, host, **kwargs)
         except exception.AggregateError:
+            error = sys.exc_info()
+            self._undo_aggregate_operation(context, self.db.aggregate_host_add,
+                                           aggregate.id, host)
+            raise error[0], error[1], error[2]
+
+    def _undo_aggregate_operation(self, context, op, aggregate_id, host):
+        try:
             status = {'operational_state': aggregate_states.ERROR}
-            self.db.aggregate_update(context, aggregate.id, status)
-            self.db.aggregate_host_add(context, aggregate_id, host)
-            raise
+            self.db.aggregate_update(context, aggregate_id, status)
+            op(context, aggregate_id, host)
+        except Exception:
+            LOG.exception(_('Aggregate %(aggregate_id)s: unrecoverable state '
+                            'during operation on %(host)s') % locals())
 
     @manager.periodic_task(
         ticks_between_runs=FLAGS.image_cache_manager_interval)
