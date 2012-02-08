@@ -154,9 +154,8 @@ class ResourcePool(object):
             # shutdown nova-compute; if there are other VMs running e.g. guest
             # instances, the eject will fail. That's a precaution in face of
             # the fact that the admin should evacuate the host first
-            vm_ref = self._session.call_xenapi('VM.get_by_uuid', compute_uuid) 
+            vm_ref = self._session.call_xenapi('VM.get_by_uuid', compute_uuid)
             self._session.call_xenapi("VM.clean_shutdown", vm_ref)
-            
             host_ref = self._session.call_xenapi('host.get_by_uuid', host_uuid)
             self._session.call_xenapi("pool.eject", host_ref)
         except self.XenAPI.Failure, e:
