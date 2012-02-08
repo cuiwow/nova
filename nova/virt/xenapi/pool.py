@@ -53,6 +53,7 @@ class ResourcePool(object):
         host_rec = session.call_xenapi('host.get_record', host_ref)
         self._host_name = host_rec['hostname']
         self._host_addr = host_rec['address']
+        self._host_uuid = host_rec['uuid']
         self._session = session
 
     def add_to_aggregate(self, context, aggregate, host, **kwargs):
@@ -85,18 +86,23 @@ class ResourcePool(object):
                                  kwargs.get('compute_uuid'),
                                  kwargs.get('url'), kwargs.get('user'),
                                  kwargs.get('passwd'))
+                metadata = {host: kwargs.get('xenhost_uuid'), }
+                db.aggregate_metadata_add(context, aggregate.id, metadata)
             elif master_compute and master_compute != host:
                 # send rpc cast to master, asking to add the following
                 # host with specified credentials.
                 # NOTE: password in clear is not great, but it'll do for now
                 forward_request(context, "add_aggregate_host", master_compute,
-                                aggregate.id, host, self._host_addr)
+                                aggregate.id, host,
+                                self._host_addr, self._host_uuid)
 
     def remove_from_aggregate(self, context, aggregate, host, **kwargs):
         master_compute = aggregate.metadetails.get('master_compute')
         if master_compute == FLAGS.host and master_compute != host:
             # this is the master -> instruct it to eject a host from the pool
-            self._eject_slave(aggregate.id)
+            host_uuid = db.aggregate_metadata_get(context, aggregate.id)[host]
+            self._eject_slave(aggregate.id,
+                              kwargs.get('compute_uuid'), host_uuid)
         elif master_compute == host:
             # Remove master from its own pool -> destroy pool only if the
             # master is on its own, otherwise raise fault. Destroying a
@@ -111,7 +117,8 @@ class ResourcePool(object):
         elif master_compute and master_compute != host:
             # A master exists -> forward pool-eject request to master
             forward_request(context, "remove_aggregate_host", master_compute,
-                            aggregate.id, host, self._host_addr)
+                            aggregate.id, host,
+                            self._host_addr, self._host_uuid)
         else:
             # this shouldn't have happened
             raise exception.AggregateError(aggregate_id=aggregate.id,
@@ -141,10 +148,16 @@ class ResourcePool(object):
                                            reason=_('Unable to join %(host)s '
                                                   'in the pool') % locals())
 
-    def _eject_slave(self, aggregate_id):
+    def _eject_slave(self, aggregate_id, compute_uuid, host_uuid):
         """Eject a slave from a XenServer resource pool."""
         try:
-            host_ref = self._session.get_xenapi_host()
+            # shutdown nova-compute; if there are other VMs running e.g. guest
+            # instances, the eject will fail. That's a precaution in face of
+            # the fact that the admin should evacuate the host first
+            vm_ref = self._session.call_xenapi('VM.get_by_uuid', compute_uuid) 
+            self._session.call_xenapi("VM.clean_shutdown", vm_ref)
+            
+            host_ref = self._session.call_xenapi('host.get_by_uuid', host_uuid)
             self._session.call_xenapi("pool.eject", host_ref)
         except self.XenAPI.Failure, e:
             LOG.error(_("Pool-eject failed: %(e)s") % locals())
@@ -176,8 +189,8 @@ class ResourcePool(object):
                                               % locals())
 
 
-def forward_request(context, request_type, master,
-                    aggregate_id, slave_compute, slave_address):
+def forward_request(context, request_type, master, aggregate_id,
+                    slave_compute, slave_address, slave_uuid):
     """Casts add/remove requests to the pool master."""
     # replace the address from the xenapi connection url
     # because this might be 169.254.0.1, i.e. xenapi
@@ -189,7 +202,8 @@ def forward_request(context, request_type, master,
                        "url": sender_url,
                        "user": FLAGS.xenapi_connection_username,
                        "passwd": FLAGS.xenapi_connection_password,
-                       "compute_uuid": vm_utils.get_this_vm_uuid(), },
+                       "compute_uuid": vm_utils.get_this_vm_uuid(),
+                       "xenhost_uuid": slave_uuid },
              })
 
 
@@ -197,4 +211,3 @@ def swap_xapi_host(url, host_addr):
     temp_url = urlparse.urlparse(url)
     _, sep, port = temp_url.netloc.partition(':')
     return url.replace(url.netloc, '%s%s%s' % (host_addr, sep, port))
-

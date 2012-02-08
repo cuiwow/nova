@@ -1773,7 +1773,8 @@ class XenAPIAggregateTestCase(test.TestCase):
                                          compute_uuid='fake_uuid',
                                          url='fake_url',
                                          user='fake_user',
-                                         passwd='fake_pass')
+                                         passwd='fake_pass',
+                                         xenhost_uuid='fake_uuid')
         self.assertTrue(fake_join_slave.called)
 
     def test_add_to_aggregate_first_host(self):
@@ -1814,10 +1815,11 @@ class XenAPIAggregateTestCase(test.TestCase):
 
     def test_remove_slave(self):
         """Ensure eject slave gets called."""
-        def fake_eject_slave(id):
+        def fake_eject_slave(id, compute_uuid, host_uuid):
             fake_eject_slave.called = True
         self.stubs.Set(self.conn._pool, "_eject_slave", fake_eject_slave)
 
+        self.fake_metadata['host2'] = 'fake_host2_uuid'
         aggregate = self._aggregate_setup(hosts=['host', 'host2'],
                                           metadata=self.fake_metadata)
         self.conn._pool.remove_from_aggregate(self.context, aggregate, "host2")
@@ -1862,4 +1864,3 @@ class XenAPIAggregateTestCase(test.TestCase):
         if metadata:
             db.aggregate_metadata_add(self.context, result.id, metadata)
         return db.aggregate_get(self.context, result.id)
-

@@ -78,11 +78,10 @@ from nova import flags
 from nova import log as logging
 from nova.openstack.common import cfg
 from nova.virt import driver
+from nova.virt.xenapi import pool
 from nova.virt.xenapi import vm_utils
 from nova.virt.xenapi.vmops import VMOps
 from nova.virt.xenapi.volumeops import VolumeOps
-from nova.virt.xenapi.pool import ResourcePool
-from nova.virt.xenapi.pool import swap_xapi_host
 
 
 LOG = logging.getLogger("nova.virt.xenapi")
@@ -182,7 +181,7 @@ class XenAPIConnection(driver.ComputeDriver):
         self._product_version = self._session.get_product_version()
         self._vmops = VMOps(self._session, self._product_version)
         self._initiator = None
-        self._pool = ResourcePool(self._session)
+        self._pool = pool.ResourcePool(self._session)
 
     @property
     def host_state(self):
@@ -520,7 +519,8 @@ class XenAPISession(object):
                 # if user and pw of the master are different, we're doomed!
                 if e.details[0] == 'HOST_IS_SLAVE':
                     master = e.details[1]
-                    session = self.XenAPI.Session(swap_xapi_host(url, master))
+                    session = self.XenAPI.Session(pool.swap_xapi_host(url,
+                                                                      master))
                     session.login_with_password(user, pw)
                 else:
                     raise

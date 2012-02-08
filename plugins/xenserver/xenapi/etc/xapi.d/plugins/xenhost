@@ -279,14 +279,11 @@ def host_join(self, arg_dict):
             # join has been successful, wait for xapi to become alive again
             for c in xrange(1, 24):
                 try:
-                    f = open('/var/run/xapi.pid')
-                    f = xapi_pid = int(f.read())
-                    f.close()
-                    os.kill(xapi_pid, 0)
                     cmd = "xe vm-start uuid=%s" % arg_dict.get('compute_uuid')
                     _run_command(cmd)
                     return
-                except:
+                except pluginlib.PluginError, e:
+                    logging.exception('Waiting for host to become available.')
                     time.sleep(10)
         raise pluginlib.PluginError('Unrecoverable error!')
 
@@ -294,7 +291,6 @@ def host_join(self, arg_dict):
     session.login_with_password(arg_dict.get("user"),
                                 arg_dict.get("password"))
     compute_ref = session.xenapi.VM.get_by_uuid(arg_dict.get('compute_uuid'))
-    session.xenapi.VM.shutdown(compute_ref)
     session.xenapi.VM.clean_shutdown(compute_ref)
     try:
         if arg_dict.get("force"):
