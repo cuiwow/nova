@@ -65,13 +65,7 @@ class ResourcePool(object):
             # the password should be encrypted, really.
             values = {
                 'operational_state': aggregate_states.ACTIVE,
-                'metadata': {
-                     'master_compute': host,
-                     'master_address': self._host_addr,
-                     'master_hostname': self._host_name,
-                     'master_username': FLAGS.xenapi_connection_username,
-                     'master_password': FLAGS.xenapi_connection_password,
-                     },
+                'metadata': {'master_compute': host},
                 }
             db.aggregate_update(context, aggregate.id, values)
         else:
@@ -97,23 +91,28 @@ class ResourcePool(object):
                                 self._host_addr, self._host_uuid)
 
     def remove_from_aggregate(self, context, aggregate, host, **kwargs):
+        """Remove a compute host from an aggregate."""
         master_compute = aggregate.metadetails.get('master_compute')
         if master_compute == FLAGS.host and master_compute != host:
             # this is the master -> instruct it to eject a host from the pool
             host_uuid = db.aggregate_metadata_get(context, aggregate.id)[host]
             self._eject_slave(aggregate.id,
                               kwargs.get('compute_uuid'), host_uuid)
+            db.aggregate_metadata_delete(context, aggregate.id, host)
         elif master_compute == host:
             # Remove master from its own pool -> destroy pool only if the
             # master is on its own, otherwise raise fault. Destroying a
             # pool made only by master is fictional
+            if len(aggregate.hosts) > 1:
+                raise exception.AggregateError(
+                                    aggregate_id=aggregate.id,
+                                    action='remove_from_aggregate',
+                                    reason=_('Unable to eject %(host)s '
+                                             'from the pool; pool not empty')
+                                             % locals())
             self._clear_pool(aggregate.id)
-            # Metadata clear-out
-            metadata_keys = ['master_address', 'master_hostname',
-                             'master_compute', 'master_username',
-                             'master_password', ]
-            for key in metadata_keys:
-                db.aggregate_metadata_delete(context, aggregate.id, key)
+            db.aggregate_metadata_delete(context,
+                                         aggregate.id, 'master_compute')
         elif master_compute and master_compute != host:
             # A master exists -> forward pool-eject request to master
             forward_request(context, "remove_aggregate_host", master_compute,
@@ -151,11 +150,13 @@ class ResourcePool(object):
     def _eject_slave(self, aggregate_id, compute_uuid, host_uuid):
         """Eject a slave from a XenServer resource pool."""
         try:
-            # shutdown nova-compute; if there are other VMs running e.g. guest
-            # instances, the eject will fail. That's a precaution in face of
-            # the fact that the admin should evacuate the host first
+            # shutdown nova-compute; if there are other VMs running, e.g.
+            # guest instances, the eject will fail. That's a precaution
+            # to deal with the fact that the admin should evacuate the host
+            # first. The eject wipes out the host completely.
             vm_ref = self._session.call_xenapi('VM.get_by_uuid', compute_uuid)
             self._session.call_xenapi("VM.clean_shutdown", vm_ref)
+
             host_ref = self._session.call_xenapi('host.get_by_uuid', host_uuid)
             self._session.call_xenapi("pool.eject", host_ref)
         except self.XenAPI.Failure, e:
@@ -165,6 +166,7 @@ class ResourcePool(object):
                                            reason=str(e.details))
 
     def _init_pool(self, aggregate_id, aggregate_name):
+        """Set the name label of a XenServer pool."""
         try:
             pool_ref = self._session.call_xenapi("pool.get_all")[0]
             self._session.call_xenapi("pool.set_name_label",
@@ -176,16 +178,15 @@ class ResourcePool(object):
                                            reason=str(e.details))
 
     def _clear_pool(self, aggregate_id):
+        """Clear the name label of a XenServer pool."""
         try:
             pool_ref = self._session.call_xenapi('pool.get_all')[0]
             self._session.call_xenapi('pool.set_name_label', pool_ref, '')
         except self.XenAPI.Failure, e:
-            LOG.error(_("Pool-eject failed: %(e)s") % locals())
+            LOG.error(_("Pool-set_name_label failed: %(e)s") % locals())
             raise exception.AggregateError(aggregate_id=aggregate_id,
                                            action='remove_from_aggregate',
-                                           reason=_('Unable to eject %(host)s '
-                                              'from the pool; pool not empty')
-                                              % locals())
+                                           reason=str(e.details))
 
 
 def forward_request(context, request_type, master, aggregate_id,
@@ -207,6 +208,7 @@ def forward_request(context, request_type, master, aggregate_id,
 
 
 def swap_xapi_host(url, host_addr):
+    """Replace the XenServer address present in 'url' with 'host_addr'."""
     temp_url = urlparse.urlparse(url)
     _, sep, port = temp_url.netloc.partition(':')
-    return url.replace(url.netloc, '%s%s%s' % (host_addr, sep, port))
+    return url.replace(temp_url.netloc, '%s%s%s' % (host_addr, sep, port))

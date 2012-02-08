@@ -1729,11 +1729,7 @@ class XenAPIAggregateTestCase(test.TestCase):
         self.context = context.get_admin_context()
         self.conn = xenapi_conn.get_connection(False)
         self.flags(host='host')
-        self.fake_metadata = {'master_password': 'test_pass',
-                              'master_compute': 'host',
-                              'master_address': '127.0.0.1',
-                              'master_username': 'root',
-                              'master_hostname': 'fake_name', }
+        self.fake_metadata = {'master_compute': 'host'}
 
     def tearDown(self):
         super(XenAPIAggregateTestCase, self).tearDown()
@@ -1839,13 +1835,10 @@ class XenAPIAggregateTestCase(test.TestCase):
         self.assertDictMatch({}, result.metadetails)
         self.assertEqual(aggregate_states.ACTIVE, result.operational_state)
 
-    def test_remote_master_non_empty(self):
+    def test_remote_master_non_empty_pool(self):
         """Ensure AggregateError is raised if removing the master."""
-        def fake_clear_pool_raise(id):
-            raise exception.AggregateError()
-        self.stubs.Set(self.conn._pool, "_clear_pool", fake_clear_pool_raise)
-
         aggregate = self._aggregate_setup(aggr_state=aggregate_states.ACTIVE,
+                                          hosts=['host', 'host2'],
                                           metadata=self.fake_metadata)
         self.assertRaises(exception.AggregateError,
                           self.conn._pool.remove_from_aggregate,

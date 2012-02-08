@@ -3115,8 +3115,8 @@ def _create_service_entries(context, values={'avail_zone1': ['fake_host1',
 
 
 class ComputeAPIAggrTestCase(test.TestCase):
-    """This for unit coverage of aggregate-related methods
-    defined in in nova.compute.api."""
+    """This is for unit coverage of aggregate-related methods
+    defined in nova.compute.api."""
 
     def setUp(self):
         super(ComputeAPIAggrTestCase, self).setUp()
@@ -3353,12 +3353,6 @@ class ComputeAggrTestCase(BaseTestCase):
         self.stubs.Set(self.compute.driver, "add_to_aggregate",
                        fake_driver_add_to_aggregate)
 
-        def fake_db_aggregate_update(context, aggregate_id, values):
-            fake_db_aggregate_update.called = True
-            self.assertEqual(values["foo"], "bar", "db update values")
-        self.stubs.Set(self.compute.db, "aggregate_update",
-                       fake_db_aggregate_update)
-
         self.compute.add_aggregate_host(self.context, self.aggr.id, "host")
         self.assertTrue(fake_driver_add_to_aggregate.called)
 
@@ -3369,12 +3363,6 @@ class ComputeAggrTestCase(BaseTestCase):
             return {"foo": "bar"}
         self.stubs.Set(self.compute.driver, "remove_from_aggregate",
                        fake_driver_remove_from_aggregate)
-
-        def fake_db_aggregate_update(context, aggregate_id, values):
-            fake_db_aggregate_update.called = True
-            self.assertEqual(values["foo"], "bar", "db update values")
-        self.stubs.Set(self.compute.db, "aggregate_update",
-                       fake_db_aggregate_update)
 
         self.compute.remove_aggregate_host(self.context, self.aggr.id, "host")
         self.assertTrue(fake_driver_remove_from_aggregate.called)

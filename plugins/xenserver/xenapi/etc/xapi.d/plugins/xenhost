@@ -42,6 +42,8 @@ pluginlib.configure_logging("xenhost")
 
 host_data_pattern = re.compile(r"\s*(\S+) \([^\)]+\) *: ?(.*)")
 config_file_path = "/usr/etc/xenhost.conf"
+DEFAULT_TRIES = 24
+DEFAULT_SLEEP = 10 
 
 
 def jsonify(fnc):
@@ -96,6 +98,25 @@ def _run_command_with_input(cmd, process_input):
         raise pluginlib.PluginError(err)
     # This is tantamount to proc.stdout.read()
     return output
+
+
+def _resume_compute(session, compute_ref, compute_uuid):
+    """Resume compute node on slave host after pool join. This has to
+    happen regardless of the success or failure of the join operation."""
+    try:
+        # session is valid if the join operation has failed
+        session.xenapi.VM.start(compute_ref, False, True)
+    except XenAPI.Failure, e:
+        # if session is invalid, e.g. xapi has restarted, then the pool
+        # join has been successful, wait for xapi to become alive again
+        for c in xrange(1, DEFAULT_TRIES):
+            try:
+                _run_command("xe vm-start uuid=%s" % compute_uuid)
+                return
+            except pluginlib.PluginError, e:
+                logging.exception('Waiting for slave to become available.')
+                time.sleep(DEFAULT_SLEEP)
+    raise pluginlib.PluginError('Unrecoverable error!')
 
 
 def _get_host_uuid():
@@ -268,25 +289,6 @@ def host_join(self, arg_dict):
     - The host must have no shared storage currently set up,
     - The host must have the same license of the master,
     - The host must have the same supplemental packs as the master."""
-    def resume_compute(session, compute_ref, compute_uuid):
-        """Resume compute node on slave host after pool join. This has to
-        happen regardless of the success or failure of the join operation."""
-        try:
-            # session is valid if the join operation has failed
-            session.xenapi.VM.start(compute_ref, False, True)
-        except XenAPI.Failure, e:
-            # if session is invalid, e.g. xapi has restarted, then the pool
-            # join has been successful, wait for xapi to become alive again
-            for c in xrange(1, 24):
-                try:
-                    cmd = "xe vm-start uuid=%s" % arg_dict.get('compute_uuid')
-                    _run_command(cmd)
-                    return
-                except pluginlib.PluginError, e:
-                    logging.exception('Waiting for host to become available.')
-                    time.sleep(10)
-        raise pluginlib.PluginError('Unrecoverable error!')
-
     session = XenAPI.Session(arg_dict.get("url"))
     session.login_with_password(arg_dict.get("user"),
                                 arg_dict.get("password"))
@@ -302,7 +304,7 @@ def host_join(self, arg_dict):
                                            arg_dict.get("master_user"),
                                            arg_dict.get("master_pass"))
     finally:
-        resume_compute(session, compute_ref, arg_dict.get("compute_uuid"))
+        _resume_compute(session, compute_ref, arg_dict.get("compute_uuid"))
 
 
 @jsonify
