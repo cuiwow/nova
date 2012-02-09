@@ -35,7 +35,6 @@ from nova import utils
 from nova.api.ec2 import cloud
 from nova.compute import power_state
 from nova.compute import vm_states
-from nova.virt.disk import api as disk
 from nova.virt import images
 from nova.virt import driver
 from nova.virt.libvirt import connection
@@ -216,12 +215,11 @@ class CacheConcurrencyTestCase(test.TestCase):
 
         self.stubs.Set(os.path, 'exists', fake_exists)
         self.stubs.Set(utils, 'execute', fake_execute)
+        self.stubs.Set(connection.disk, 'extend', fake_extend)
         connection.libvirt_utils = fake_libvirt_utils
-        connection.disk.extend = fake_extend
 
     def tearDown(self):
         connection.libvirt_utils = libvirt_utils
-        connection.disk.extend = disk.extend
         super(CacheConcurrencyTestCase, self).tearDown()
 
     def test_same_fname_concurrency(self):
@@ -301,11 +299,10 @@ class LibvirtConnTestCase(test.TestCase):
         def fake_extend(image, size):
             pass
 
-        connection.disk.extend = fake_extend
+        self.stubs.Set(connection.disk, 'extend', fake_extend)
 
     def tearDown(self):
         connection.libvirt_utils = libvirt_utils
-        connection.disk.extend = disk.extend
         super(LibvirtConnTestCase, self).tearDown()
 
     test_instance = {'memory_kb': '1024000',
@@ -1924,20 +1921,6 @@ disk size: 4.4M''', ''))
                 self.assertEquals(fp.read(), 'hello')
         finally:
             os.unlink(dst_path)
-
-    def test_run_ajaxterm(self):
-        self.mox.StubOutWithMock(utils, 'execute')
-        token = 's3cr3tt0ken'
-        shell_cmd = 'shell-cmd.py'
-        port = 2048
-        utils.execute(mox.IgnoreArg(),
-                      '--command', shell_cmd,
-                      '-t', token,
-                      '-p', port)
-
-        # Start test
-        self.mox.ReplayAll()
-        libvirt_utils.run_ajaxterm(shell_cmd, token, port)
 
     def test_get_fs_info(self):
         # Use a 1024-byte block size (df -k) because OS X does not support

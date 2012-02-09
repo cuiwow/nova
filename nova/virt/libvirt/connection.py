@@ -102,9 +102,6 @@ libvirt_opts = [
     cfg.BoolOpt('use_cow_images',
                 default=True,
                 help='Whether to use cow images'),
-    cfg.StrOpt('ajaxterm_portrange',
-               default='10000-12000',
-               help='Range of ports that ajaxterm should try to bind'),
     cfg.StrOpt('cpuinfo_xml_template',
                default=utils.abspath('virt/cpuinfo.xml.template'),
                help='CpuInfo XML Template (Used only live migration now)'),
@@ -207,8 +204,8 @@ class LibvirtConnection(driver.ComputeDriver):
         else:
             self._disk_prefix = disk_prefix_map.get(FLAGS.libvirt_type, 'vd')
         self.default_root_device = self._disk_prefix + 'a'
-        self.default_ephemeral_device = self._disk_prefix + 'b'
-        self.default_swap_device = self._disk_prefix + 'c'
+        self.default_second_device = self._disk_prefix + 'b'
+        self.default_third_device = self._disk_prefix + 'c'
 
         self.image_cache_manager = imagecache.ImageCacheManager()
 
@@ -774,29 +771,6 @@ class LibvirtConnection(driver.ComputeDriver):
 
         return libvirt_utils.load_file(fpath)
 
-    @exception.wrap_exception()
-    def get_ajax_console(self, instance):
-        def get_pty_for_instance(instance_name):
-            virt_dom = self._lookup_by_name(instance_name)
-            xml = virt_dom.XMLDesc(0)
-            dom = minidom.parseString(xml)
-
-            for serial in dom.getElementsByTagName('serial'):
-                if serial.getAttribute('type') == 'pty':
-                    source = serial.getElementsByTagName('source')[0]
-                    return source.getAttribute('path')
-
-        start_port, end_port = FLAGS.ajaxterm_portrange.split("-")
-        port = libvirt_utils.get_open_port(int(start_port), int(end_port))
-        token = str(uuid.uuid4())
-        host = instance['host']
-
-        ajaxterm_cmd = 'sudo netcat - %s' \
-                       % get_pty_for_instance(instance['name'])
-
-        libvirt_utils.run_ajaxterm(ajaxterm_cmd, token, port)
-        return {'token': token, 'host': host, 'port': port}
-
     @staticmethod
     def get_host_ip_addr():
         return FLAGS.my_ip
@@ -985,7 +959,8 @@ class LibvirtConnection(driver.ComputeDriver):
 
         ephemeral_gb = instance['ephemeral_gb']
         if ephemeral_gb and not self._volume_in_mapping(
-            self.default_ephemeral_device, block_device_info):
+                self.default_second_device, block_device_info):
+            swap_device = self.default_third_device
             fn = functools.partial(self._create_ephemeral,
                                    fs_label='ephemeral0',
                                    os_type=instance.os_type)
@@ -995,6 +970,8 @@ class LibvirtConnection(driver.ComputeDriver):
                               ("0", ephemeral_gb, instance.os_type),
                               cow=FLAGS.use_cow_images,
                               ephemeral_size=ephemeral_gb)
+        else:
+            swap_device = self.default_second_device
 
         for eph in driver.block_device_info_get_ephemerals(block_device_info):
             fn = functools.partial(self._create_ephemeral,
@@ -1013,8 +990,7 @@ class LibvirtConnection(driver.ComputeDriver):
         if driver.swap_is_usable(swap):
             swap_mb = swap['swap_size']
         elif (inst_type['swap'] > 0 and
-              not self._volume_in_mapping(self.default_swap_device,
-                                          block_device_info)):
+              not self._volume_in_mapping(swap_device, block_device_info)):
             swap_mb = inst_type['swap']
 
         if swap_mb > 0:
@@ -1184,13 +1160,13 @@ class LibvirtConnection(driver.ComputeDriver):
                                            block_device_info)
 
         ephemeral_device = False
-        if not (self._volume_in_mapping(self.default_ephemeral_device,
+        if not (self._volume_in_mapping(self.default_second_device,
                                         block_device_info) or
                 0 in [eph['num'] for eph in
                       driver.block_device_info_get_ephemerals(
                           block_device_info)]):
             if instance['ephemeral_gb'] > 0:
-                ephemeral_device = self.default_ephemeral_device
+                ephemeral_device = self.default_second_device
 
         ephemerals = []
         for eph in driver.block_device_info_get_ephemerals(block_device_info):
@@ -1231,22 +1207,25 @@ class LibvirtConnection(driver.ComputeDriver):
                 {'root_device_name': '/dev/' + self.default_root_device})
 
         if ephemeral_device:
+            swap_device = self.default_third_device
             db.instance_update(
                 nova_context.get_admin_context(), instance['id'],
                 {'default_ephemeral_device':
-                 '/dev/' + self.default_ephemeral_device})
+                 '/dev/' + self.default_second_device})
+        else:
+            swap_device = self.default_second_device
 
         swap = driver.block_device_info_get_swap(block_device_info)
         if driver.swap_is_usable(swap):
             xml_info['swap_device'] = block_device.strip_dev(
                 swap['device_name'])
         elif (inst_type['swap'] > 0 and
-              not self._volume_in_mapping(self.default_swap_device,
+              not self._volume_in_mapping(swap_device,
                                           block_device_info)):
-            xml_info['swap_device'] = self.default_swap_device
+            xml_info['swap_device'] = swap_device
             db.instance_update(
                 nova_context.get_admin_context(), instance['id'],
-                {'default_swap_device': '/dev/' + self.default_swap_device})
+                {'default_swap_device': '/dev/' + swap_device})
 
         config_drive = False
         if instance.get('config_drive') or instance.get('config_drive_id'):

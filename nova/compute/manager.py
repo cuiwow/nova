@@ -214,8 +214,7 @@ class ComputeManager(manager.SchedulerDependentManager):
     def _set_instance_error_state(self, context, instance_uuid):
         self._instance_update(context,
                               instance_uuid,
-                              vm_state=vm_states.ERROR,
-                              task_state=None)
+                              vm_state=vm_states.ERROR)
 
     def init_host(self):
         """Initialization for a standalone compute service."""
@@ -438,8 +437,7 @@ class ComputeManager(manager.SchedulerDependentManager):
             return
         except Exception as e:
             with utils.save_and_reraise_exception():
-                self._instance_update(context, instance_uuid,
-                                      vm_state=vm_states.ERROR)
+                self._set_instance_error_state(context, instance_uuid)
 
     def _check_instance_not_already_created(self, context, instance):
         """Ensure an instance with the same name is not already present."""
@@ -1196,9 +1194,7 @@ class ComputeManager(manager.SchedulerDependentManager):
 
         same_host = instance_ref['host'] == FLAGS.host
         if same_host and not FLAGS.allow_resize_to_same_host:
-            self._instance_update(context,
-                                  instance_uuid,
-                                  vm_state=vm_states.ERROR)
+            self._set_instance_error_state(context, instance_uuid)
             msg = _('destination same as source!')
             raise exception.MigrationError(msg)
 
@@ -1254,9 +1250,7 @@ class ComputeManager(manager.SchedulerDependentManager):
             with utils.save_and_reraise_exception():
                 msg = _('%s. Setting instance vm_state to ERROR')
                 LOG.error(msg % error)
-                self._instance_update(context,
-                                      instance_uuid,
-                                      vm_state=vm_states.ERROR)
+                self._set_instance_error_state(context, instance_uuid)
 
         self.db.migration_update(context,
                                  migration_id,
@@ -1273,6 +1267,42 @@ class ComputeManager(manager.SchedulerDependentManager):
         rpc.cast(context, topic, {'method': 'finish_resize',
                                   'args': params})
 
+    def _finish_resize(self, context, instance_ref, migration_ref, disk_info):
+        resize_instance = False
+        old_instance_type_id = migration_ref['old_instance_type_id']
+        new_instance_type_id = migration_ref['new_instance_type_id']
+        if old_instance_type_id != new_instance_type_id:
+            instance_type = instance_types.get_instance_type(
+                    new_instance_type_id)
+            instance_ref = self._instance_update(
+                    context,
+                    instance_ref.uuid,
+                    instance_type_id=instance_type['id'],
+                    memory_mb=instance_type['memory_mb'],
+                    vcpus=instance_type['vcpus'],
+                    root_gb=instance_type['root_gb'],
+                    ephemeral_gb=instance_type['ephemeral_gb'])
+            resize_instance = True
+
+        network_info = self._get_instance_nw_info(context, instance_ref)
+
+        # Have to look up image here since we depend on disk_format later
+        image_meta = _get_image_meta(context, instance_ref['image_ref'])
+
+        self.driver.finish_migration(context, migration_ref, instance_ref,
+                                     disk_info,
+                                     self._legacy_nw_info(network_info),
+                                     image_meta, resize_instance)
+
+        self._instance_update(context,
+                              instance_ref.uuid,
+                              vm_state=vm_states.ACTIVE,
+                              host=migration_ref['dest_compute'],
+                              task_state=task_states.RESIZE_VERIFY)
+
+        self.db.migration_update(context, migration_ref.id,
+                                 {'status': 'finished'})
+
     @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
     @checks_instance_lock
     @wrap_instance_fault
@@ -1285,51 +1315,17 @@ class ComputeManager(manager.SchedulerDependentManager):
         """
         migration_ref = self.db.migration_get(context, migration_id)
 
-        resize_instance = False
         instance_ref = self.db.instance_get_by_uuid(context,
                 migration_ref.instance_uuid)
-        old_instance_type_id = migration_ref['old_instance_type_id']
-        new_instance_type_id = migration_ref['new_instance_type_id']
-        if old_instance_type_id != new_instance_type_id:
-            instance_type = instance_types.get_instance_type(
-                    new_instance_type_id)
-            self.db.instance_update(context, instance_ref.uuid,
-                   dict(instance_type_id=instance_type['id'],
-                        memory_mb=instance_type['memory_mb'],
-                        vcpus=instance_type['vcpus'],
-                        root_gb=instance_type['root_gb'],
-                        ephemeral_gb=instance_type['ephemeral_gb']))
-            resize_instance = True
-
-        instance_ref = self.db.instance_get_by_uuid(context,
-                                            instance_ref.uuid)
-
-        network_info = self._get_instance_nw_info(context, instance_ref)
-
-        # Have to look up image here since we depend on disk_format later
-        image_meta = _get_image_meta(context, instance_ref['image_ref'])
 
         try:
-            self.driver.finish_migration(context, migration_ref, instance_ref,
-                                         disk_info,
-                                         self._legacy_nw_info(network_info),
-                                         image_meta, resize_instance)
+            self._finish_resize(context, instance_ref, migration_ref,
+                                disk_info)
         except Exception, error:
             with utils.save_and_reraise_exception():
                 msg = _('%s. Setting instance vm_state to ERROR')
                 LOG.error(msg % error)
-                self._instance_update(context,
-                                      instance_uuid,
-                                      vm_state=vm_states.ERROR)
-
-        self._instance_update(context,
-                              instance_uuid,
-                              vm_state=vm_states.ACTIVE,
-                              host=migration_ref['dest_compute'],
-                              task_state=task_states.RESIZE_VERIFY)
-
-        self.db.migration_update(context, migration_id,
-                {'status': 'finished', })
+                self._set_instance_error_state(context, instance_ref.uuid)
 
     @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
     @checks_instance_lock
@@ -1482,7 +1478,7 @@ class ComputeManager(manager.SchedulerDependentManager):
         context = context.elevated()
 
         LOG.debug(_('instance %s: locking'), instance_uuid, context=context)
-        self.db.instance_update(context, instance_uuid, {'locked': True})
+        self._instance_update(context, instance_uuid, locked=True)
 
     @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
     @wrap_instance_fault
@@ -1491,7 +1487,7 @@ class ComputeManager(manager.SchedulerDependentManager):
         context = context.elevated()
 
         LOG.debug(_('instance %s: unlocking'), instance_uuid, context=context)
-        self.db.instance_update(context, instance_uuid, {'locked': False})
+        self._instance_update(context, instance_uuid, locked=False)
 
     @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
     @wrap_instance_fault
@@ -1551,15 +1547,6 @@ class ComputeManager(manager.SchedulerDependentManager):
             return ''
         else:
             return '\n'.join(log.split('\n')[-int(length):])
-
-    @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
-    @wrap_instance_fault
-    def get_ajax_console(self, context, instance_uuid):
-        """Return connection information for an ajax console."""
-        context = context.elevated()
-        LOG.debug(_("instance %s: getting ajax console"), instance_uuid)
-        instance_ref = self.db.instance_get_by_uuid(context, instance_uuid)
-        return self.driver.get_ajax_console(instance_ref)
 
     @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
     @wrap_instance_fault
@@ -2198,7 +2185,7 @@ class ComputeManager(manager.SchedulerDependentManager):
             'instance_uuid': instance_uuid,
             'code': code,
             'message': fault.__class__.__name__,
-            'details': fault.message,
+            'details': unicode(fault),
         }
         self.db.instance_fault_create(context, values)
 

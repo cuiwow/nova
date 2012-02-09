@@ -69,7 +69,7 @@ class FlagValues(object):
 
     def __init__(self):
         self._conf = cfg.ConfigOpts()
-        self._conf._oparser.disable_interspersed_args()
+        self._conf.disable_interspersed_args()
         self._opts = {}
         self.Reset()
 
@@ -128,7 +128,7 @@ class FlagValues(object):
         self._conf.set_default(name, default)
 
     def __iter__(self):
-        return self.FlagValuesDict().iterkeys()
+        return self._conf.iterkeys()
 
     def __getitem__(self, name):
         self._parse()
@@ -147,12 +147,12 @@ class FlagValues(object):
     def FlagValuesDict(self):
         self._parse()
         ret = {}
-        for opt in self._opts.values():
-            ret[opt.dest] = getattr(self, opt.dest)
+        for name in self._conf:
+            ret[name] = getattr(self, name)
         return ret
 
     def add_option(self, opt):
-        if opt.dest in self._opts:
+        if opt.dest in self._conf:
             return
 
         self._opts[opt.dest] = opt
@@ -250,15 +250,6 @@ global_opts = [
     cfg.StrOpt('network_topic',
                default='network',
                help='the topic network nodes listen on'),
-    cfg.StrOpt('ajax_console_proxy_topic',
-               default='ajax_proxy',
-               help='the topic ajax proxy nodes listen on'),
-    cfg.StrOpt('ajax_console_proxy_url',
-               default='http://127.0.0.1:8000',
-               help='URL of ajax console proxy, in the form http://host:port'),
-    cfg.IntOpt('ajax_console_proxy_port',
-               default=8000,
-               help='port that ajax_console_proxy binds'),
     cfg.StrOpt('vsa_topic',
                default='vsa',
                help='the topic that nova-vsa service listens on'),
@@ -322,11 +313,21 @@ global_opts = [
     cfg.StrOpt('ec2_path',
                default='/services/Cloud',
                help='suffix for ec2'),
+    cfg.ListOpt('osapi_compute_ext_list',
+                default=[],
+                help='Specify list of extensions to load when using osapi_'
+                     'compute_extension option with nova.api.openstack.'
+                     'compute.contrib.select_extensions'),
     cfg.MultiStrOpt('osapi_compute_extension',
                     default=[
                       'nova.api.openstack.compute.contrib.standard_extensions'
                       ],
                     help='osapi compute extension to load'),
+    cfg.ListOpt('osapi_volume_ext_list',
+                default=[],
+                help='Specify list of extensions to load when using osapi_'
+                     'volume_extension option with nova.api.openstack.'
+                     'volume.contrib.select_extensions'),
     cfg.MultiStrOpt('osapi_volume_extension',
                     default=[
                       'nova.api.openstack.volume.contrib.standard_extensions'
@@ -503,6 +504,10 @@ global_opts = [
     cfg.BoolOpt('use_ipv6',
                 default=False,
                 help='use ipv6'),
+    cfg.BoolOpt('enable_instance_password',
+                default=True,
+                help='Allows use of instance password during '
+                       'server creation'),
     cfg.IntOpt('password_length',
                default=12,
                help='Length of generated instance admin passwords'),

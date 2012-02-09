@@ -1,7 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 
-# Copyright 2011 Justin Santa Barbara
-# All Rights Reserved.
+# Copyright (c) 2011 University of Southern California
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -14,26 +13,30 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+#
 
-"""Contrib contains extensions that are shipped with nova.
-
-It can't be called 'extensions' because that causes namespacing problems.
-
-"""
-
+from nova.virt.baremetal import tilera
+from nova.virt.baremetal import fake
+from nova.openstack.common import cfg
 from nova import flags
-from nova import log as logging
-from nova.api.openstack import extensions
-
+from nova import exception
 
 FLAGS = flags.FLAGS
-LOG = logging.getLogger('nova.api.openstack.volume.contrib')
+
+global_opts = [
+    cfg.StrOpt('baremetal_driver',
+               default='tilera',
+               help='Bare-metal driver runs on')
+    ]
+
+FLAGS.add_options(global_opts)
 
 
-def standard_extensions(ext_mgr):
-    extensions.load_standard_extensions(ext_mgr, LOG, __path__, __package__)
-
-
-def select_extensions(ext_mgr):
-    extensions.load_standard_extensions(ext_mgr, LOG, __path__, __package__,
-                                        FLAGS.osapi_volume_ext_list)
+def get_baremetal_nodes():
+    d = FLAGS.baremetal_driver
+    if  d == 'tilera':
+        return tilera.get_baremetal_nodes()
+    elif d == 'fake':
+        return fake.get_baremetal_nodes()
+    else:
+        raise exception.Error(_("Unknown baremetal driver %(d)s"))
