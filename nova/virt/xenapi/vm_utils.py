@@ -1773,4 +1773,3 @@ def _prepare_injectables(inst, networks_info):
                                 searchList=[{'interfaces': interfaces_info,
                                             'use_ipv6': FLAGS.use_ipv6}]))
     return key, net, metadata
-
