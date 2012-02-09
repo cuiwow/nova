@@ -1041,7 +1041,8 @@ class VMHelper(HelperBase):
 
         try:
             diags = {}
-            xml = get_rrd(host_ip, record["uuid"])
+            vm_uuid = record["uuid"]
+            xml = get_rrd(host_ip, vm_uuid)
             if xml:
                 rrd = minidom.parseString(xml)
                 for i, node in enumerate(rrd.firstChild.childNodes):
@@ -1053,7 +1054,9 @@ class VMHelper(HelperBase):
                             diags[ref[0].firstChild.data] = \
                                 ref[6].firstChild.data
             return diags
-        except cls.XenAPI.Failure as e:
+        except expat.ExpatError as e:
+            LOG.exception(_('Unable to parse rrd of %(vm_uuid)s obtained '
+                            'from %(host_ip)s for %(host).') % locals())
             return {"Unable to retrieve diagnostics": e}
 
     @classmethod
