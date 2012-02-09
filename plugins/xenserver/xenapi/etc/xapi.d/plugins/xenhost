@@ -42,8 +42,8 @@ pluginlib.configure_logging("xenhost")
 
 host_data_pattern = re.compile(r"\s*(\S+) \([^\)]+\) *: ?(.*)")
 config_file_path = "/usr/etc/xenhost.conf"
-DEFAULT_TRIES = 24
-DEFAULT_SLEEP = 10 
+DEFAULT_TRIES = 23
+DEFAULT_SLEEP = 10
 
 
 def jsonify(fnc):
@@ -109,14 +109,17 @@ def _resume_compute(session, compute_ref, compute_uuid):
     except XenAPI.Failure, e:
         # if session is invalid, e.g. xapi has restarted, then the pool
         # join has been successful, wait for xapi to become alive again
-        for c in xrange(1, DEFAULT_TRIES):
+        for c in xrange(0, DEFAULT_TRIES):
             try:
                 _run_command("xe vm-start uuid=%s" % compute_uuid)
                 return
             except pluginlib.PluginError, e:
-                logging.exception('Waiting for slave to become available.')
+                logging.exception('Waited %d seconds for the slave to '
+                                  'become available.' % c * DEFAULT_SLEEP)
                 time.sleep(DEFAULT_SLEEP)
-    raise pluginlib.PluginError('Unrecoverable error!')
+    raise pluginlib.PluginError('Unrecoverable error: the host has '
+                                'not come back for more than %d seconds'
+                                % DEFAULT_SLEEP * (DEFAULT_TRIES + 1))
 
 
 def _get_host_uuid():

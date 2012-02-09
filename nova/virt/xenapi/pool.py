@@ -140,7 +140,7 @@ class ResourcePool(object):
             task = self._session.async_call_plugin('xenhost',
                                                    'host_join', args)
             self._session.wait_for_task(task)
-        except self.XenAPI.Failure, e:
+        except self.XenAPI.Failure as e:
             LOG.error(_("Pool-Join failed: %(e)s") % locals())
             raise exception.AggregateError(aggregate_id=aggregate_id,
                                            action='add_to_aggregate',
@@ -159,7 +159,7 @@ class ResourcePool(object):
 
             host_ref = self._session.call_xenapi('host.get_by_uuid', host_uuid)
             self._session.call_xenapi("pool.eject", host_ref)
-        except self.XenAPI.Failure, e:
+        except self.XenAPI.Failure as e:
             LOG.error(_("Pool-eject failed: %(e)s") % locals())
             raise exception.AggregateError(aggregate_id=aggregate_id,
                                            action='remove_from_aggregate',
@@ -171,7 +171,7 @@ class ResourcePool(object):
             pool_ref = self._session.call_xenapi("pool.get_all")[0]
             self._session.call_xenapi("pool.set_name_label",
                                       pool_ref, aggregate_name)
-        except self.XenAPI.Failure, e:
+        except self.XenAPI.Failure as e:
             LOG.error(_("Unable to set up pool: %(e)s.") % locals())
             raise exception.AggregateError(aggregate_id=aggregate_id,
                                            action='add_to_aggregate',
@@ -182,7 +182,7 @@ class ResourcePool(object):
         try:
             pool_ref = self._session.call_xenapi('pool.get_all')[0]
             self._session.call_xenapi('pool.set_name_label', pool_ref, '')
-        except self.XenAPI.Failure, e:
+        except self.XenAPI.Failure as e:
             LOG.error(_("Pool-set_name_label failed: %(e)s") % locals())
             raise exception.AggregateError(aggregate_id=aggregate_id,
                                            action='remove_from_aggregate',
