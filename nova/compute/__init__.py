@@ -18,3 +18,4 @@
 
 from nova.compute.api import API
 from nova.compute.api import AggregateAPI
+from nova.compute.api import HostAPI
