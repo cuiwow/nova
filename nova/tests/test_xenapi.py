@@ -237,6 +237,12 @@ class XenAPIVMTestCase(test.TestCase):
         instances = self.conn.list_instances()
         self.assertEquals(instances, [])
 
+    def test_get_rrd_server(self):
+        self.flags(xenapi_connection_url='myscheme://myaddress/')
+        server_info = vm_utils.get_rrd_server()
+        self.assertEqual(server_info[0], 'myscheme')
+        self.assertEqual(server_info[1], 'myaddress')
+
     def test_get_diagnostics(self):
         def fake_get_rrd(host, vm_uuid):
             with open('xenapi/vm_rrd.xml') as f:
@@ -747,6 +753,10 @@ class XenAPIVMTestCase(test.TestCase):
         if spawn:
             self.conn.spawn(self.context, instance, image_meta, network_info)
         return instance
+
+    def tearDown(self):
+        super(XenAPIVMTestCase, self).tearDown()
+        self.stubs.UnsetAll()
 
 
 class XenAPIDiffieHellmanTestCase(test.TestCase):
