@@ -30,7 +30,6 @@ import os
 import random
 import re
 import subprocess
-import sys
 import tempfile
 import time
 
@@ -101,14 +100,12 @@ def _run_command_with_input(cmd, process_input):
     return output
 
 
-def _resume_compute(session, compute_ref, compute_uuid, join_error=None):
+def _resume_compute(session, compute_ref, compute_uuid):
     """Resume compute node on slave host after pool join. This has to
     happen regardless of the success or failure of the join operation."""
     try:
         # session is valid if the join operation has failed
         session.xenapi.VM.start(compute_ref, False, True)
-        if join_error:
-            raise join_error[0], join_error[1]
     except XenAPI.Failure, e:
         # if session is invalid, e.g. xapi has restarted, then the pool
         # join has been successful, wait for xapi to become alive again
@@ -295,7 +292,6 @@ def host_join(self, arg_dict):
     - The host must have no shared storage currently set up,
     - The host must have the same license of the master,
     - The host must have the same supplemental packs as the master."""
-    error = None
     session = XenAPI.Session(arg_dict.get("url"))
     session.login_with_password(arg_dict.get("user"),
                                 arg_dict.get("password"))
@@ -310,11 +306,8 @@ def host_join(self, arg_dict):
             session.xenapi.pool.join_force(arg_dict.get("master_addr"),
                                            arg_dict.get("master_user"),
                                            arg_dict.get("master_pass"))
-    except:
-        error = sys.exc_info()[:2]
     finally:
-        _resume_compute(session, compute_ref,
-                        arg_dict.get("compute_uuid"), error)
+        _resume_compute(session, compute_ref, arg_dict.get("compute_uuid"))
 
 
 @jsonify
