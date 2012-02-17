@@ -1681,7 +1681,8 @@ class HostAPI(base.Base):
         """Start/Stop host maintenance window. On start, it triggers
         guest VMs evacuation."""
         raise _call_compute_message(self.db, "host_maintenance_mode", context,
-                                    host=host, params={"mode": mode})
+                                    host=host, params={"host": host,
+                                                       "mode": mode})
 
 
 class AggregateAPI(base.Base):

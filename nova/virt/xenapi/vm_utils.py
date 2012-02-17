@@ -945,7 +945,7 @@ class VMHelper(HelperBase):
     @classmethod
     def list_vms(cls, session):
         for vm_ref, vm_rec in cls.get_all_refs_and_recs(session, 'VM'):
-            if (vm_rec["resident_on"] != session.get_xenapi_host() and
+            if (vm_rec["resident_on"] != session.get_xenapi_host() or
                 vm_rec["is_a_template"] or vm_rec["is_control_domain"]):
                 continue
             else:

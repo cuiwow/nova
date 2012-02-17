@@ -67,7 +67,8 @@ class Host(object):
                         instance = db.instance_get_by_uuid(ctxt, uuid)
                         new_host = _host_find(ctxt, self._session, host,
                                               self._session.get_xenapi_host())
-                        db.instance_update(ctxt, instance.id, host=new_host)
+                        db.instance_update(ctxt,
+                                           instance.id, {'host': new_host})
                         migrations_counter = migrations_counter + 1
                         break
                     except self.XenAPI.Failure:
@@ -174,6 +175,6 @@ def _host_find(context, session, host, host_ref):
     # TODO: improve according the note above
     aggregate = db.aggregate_get_by_host(context, host)
     uuid = session.call_xenapi('host.get_record', host_ref)['uuid']
-    for compute_host, host_uuid in aggregate.metadetails:
+    for compute_host, host_uuid in aggregate.metadetails.iteritems():
         if host_uuid == uuid:
             return compute_host
