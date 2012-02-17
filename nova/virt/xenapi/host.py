@@ -49,29 +49,43 @@ class Host(object):
     def host_maintenance_mode(self, host, mode):
         """Start/Stop host maintenance window. On start, it triggers
         guest VMs evacuation."""
-        host_list = [host_ref for host_ref in
-                     self._session.call_xenapi('host.get_all') \
-                     if host_ref != self._session.get_xenapi_host()]
-        ctxt = context.get_admin_context()
-        for vm_ref, vm_rec in vm_utils.VMHelper.list_vms(self._session):
-            for host_ref in host_list:
-                try:
-                    self._session.call_xenapi('VM.pool_migrate',
-                                              vm_ref, host_ref, {})
-                    instance_uuid = vm_rec['other_config']['nova_uuid']
-                    instance = db.instance_get_by_uuid(ctxt, instance_uuid)
-                    db.instance_update(ctxt, instance.id, host=host)
-                    break
-                except self.XenAPI.Failure:
-                    LOG.exception('Unable to migrate VM %(vm_ref)s'
-                                  'from %(host)s' % locals())
-        return mode
+        if mode:
+            host_list = [host_ref for host_ref in
+                         self._session.call_xenapi('host.get_all') \
+                         if host_ref != self._session.get_xenapi_host()]
+            migrations_counter = vm_counter = 0
+            ctxt = context.get_admin_context()
+            for vm_ref, vm_rec in vm_utils.VMHelper.list_vms(self._session):
+                vm_counter = vm_counter + 1
+                for host_ref in host_list:
+                    try:
+                        self._session.call_xenapi('VM.pool_migrate',
+                                                  vm_ref, host_ref, {})
+                        uuid = vm_rec['other_config'].get('nova_uuid', None)
+                        if not uuid:
+                            uuid = _uuid_find(ctxt, host, vm_rec['name_label'])
+                        instance = db.instance_get_by_uuid(ctxt, uuid)
+                        new_host = _host_find(ctxt, self._session, host,
+                                              self._session.get_xenapi_host())
+                        db.instance_update(ctxt, instance.id, host=new_host)
+                        migrations_counter = migrations_counter + 1
+                        break
+                    except self.XenAPI.Failure:
+                        LOG.exception('Unable to migrate VM %(vm_ref)s'
+                                      'from %(host)s' % locals())
+            if vm_counter == migrations_counter:
+                return 'on_maintenance'
+            else:
+                raise exception.NoValidHost(reason='Unable to find suitable '
+                                                   'host for VMs evacuation')
+        else:
+            return 'off_maintenance'
 
     def set_host_enabled(self, host, enabled):
         """Sets the specified host's ability to accept new instances."""
         args = {"enabled": json.dumps(enabled)}
         response = call_xenhost(self._session, "set_host_enabled", args)
-        return response.get('status', response)
+        return response.get("status", response)
 
 
 class HostState(object):
@@ -144,3 +158,22 @@ def call_xenhost(session, method, arg_dict):
         LOG.error(_("The call to %(method)s returned "
                     "an error: %(e)s.") % locals())
         return e.details[1]
+
+
+def _uuid_find(context, host, name_label):
+    """Return instance uuid by name_label."""
+    for i in db.instance_get_all_by_host(context, host):
+        if i['name'] == name_label:
+            return i['uuid']
+
+
+def _host_find(context, session, host, host_ref):
+    """Return the host from the xenapi host reference."""
+    # NOTE: this would be a lot simpler if nova-compute stored
+    # FLAGS.host in the XenServer host's other-config map.
+    # TODO: improve according the note above
+    aggregate = db.aggregate_get_by_host(context, host)
+    uuid = session.call_xenapi('host.get_record', host_ref)['uuid']
+    for compute_host, host_uuid in aggregate.metadetails:
+        if host_uuid == uuid:
+            return compute_host

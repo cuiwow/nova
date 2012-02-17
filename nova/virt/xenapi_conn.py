@@ -494,6 +494,7 @@ class XenAPIConnection(driver.ComputeDriver):
         """Remove a compute host from an aggregate."""
         return self._pool.remove_from_aggregate(context,
                                                 aggregate, host, **kwargs)
+
     def host_maintenance_mode(self, host, mode):
         """Start/Stop host maintenance window. On start, it triggers
         guest VMs evacuation."""

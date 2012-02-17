@@ -1149,10 +1149,12 @@ class XenAPIHostTestCase(test.TestCase):
                           self.conn.host_power_action, 'host', 'startup')
 
     def test_host_maintenance_on(self):
-        self._test_host_action(self.conn.host_maintenance_mode, '')
+        self._test_host_action(self.conn.host_maintenance_mode,
+                               True, 'on_maintenance')
 
     def test_host_maintenance_off(self):
-        self._test_host_action(self.conn.host_maintenance_mode, '')
+        self._test_host_action(self.conn.host_maintenance_mode,
+                               False, 'off_maintenance')
 
     def test_set_enable_host_enable(self):
         self._test_host_action(self.conn.set_host_enabled, True, 'enabled')
