@@ -563,12 +563,10 @@ class XenAPISession(object):
 
     def get_xenapi_host(self):
         """Return the xenapi host on which nova-compute runs on."""
-        if self.host_uuid:
-            with self._get_session() as session:
-                return self._session.call_xenapi("host.get_by_uuid",
-                                                 self.host_uuid)
-        else:
-            with self._get_session() as session:
+        with self._get_session() as session:
+            if self.host_uuid:
+                return session.xenapi.host.get_by_uuid(self.host_uuid)
+            else:
                 return session.xenapi.session.get_this_host(session.handle)
 
     def call_xenapi(self, method, *args):
@@ -594,6 +592,10 @@ class XenAPISession(object):
         # _get_session() acquires a session too, it can result in a deadlock
         # if multiple greenthreads race with each other. See bug 924918
         host = self.get_xenapi_host()
+        # NOTE(armando): pass the host uuid along with the args so that
+        # the plugin gets executed on the right host when using XS pools
+        if self.host_uuid:
+            args['host_uuid'] = self.host_uuid
         with self._get_session() as session:
             return tpool.execute(self._unwrap_plugin_exceptions,
                                  session.xenapi.Async.host.call_plugin,
