@@ -23,6 +23,8 @@ import logging
 import json
 import random
 
+from nova import context
+from nova import db
 from nova import exception
 from nova.virt.xenapi import vm_utils
 
@@ -41,14 +43,29 @@ class Host(object):
         """Reboots or shuts down the host."""
         args = {"action": json.dumps(action)}
         methods = {"reboot": "host_reboot", "shutdown": "host_shutdown"}
-        json_resp = call_xenhost(methods[action], args)
-        resp = json.loads(json_resp)
-        return resp["power_action"]
+        response = call_xenhost(self._session, methods[action], args)
+        return response.get("power_action", response)
 
     def host_maintenance_mode(self, host, mode):
         """Start/Stop host maintenance window. On start, it triggers
         guest VMs evacuation."""
-        raise NotImplementedError()
+        host_list = [host_ref for host_ref in
+                     self._session.call_xenapi('host.get_all') \
+                     if host_ref != self._session.get_xenapi_host()]
+        ctxt = context.get_admin_context()
+        for vm_ref, vm_rec in vm_utils.VMHelper.list_vms(self._session):
+            for host_ref in host_list:
+                try:
+                    self._session.call_xenapi('VM.pool_migrate',
+                                              vm_ref, host_ref, {})
+                    instance_uuid = vm_rec['other_config']['nova_uuid']
+                    instance = db.instance_get_by_uuid(ctxt, instance_uuid)
+                    db.instance_update(ctxt, instance.id, host=host)
+                    break
+                except self.XenAPI.Failure:
+                    LOG.exception('Unable to migrate VM %(vm_ref)s'
+                                  'from %(host)s' % locals())
+        return mode
 
     def set_host_enabled(self, host, enabled):
         """Sets the specified host's ability to accept new instances."""

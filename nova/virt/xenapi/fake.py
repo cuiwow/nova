@@ -80,11 +80,12 @@ def log_db_contents(msg=None):
 def reset():
     for c in _CLASSES:
         _db_content[c] = {}
-    create_host('fake', 'fake_name')
+    host = create_host('fake')
     create_vm('fake',
               'Running',
               is_a_template=False,
-              is_control_domain=True)
+              is_control_domain=True,
+              host_ref=host)
 
 
 def reset_table(table):
@@ -112,14 +113,15 @@ def create_network(name_label, bridge):
 
 
 def create_vm(name_label, status,
-              is_a_template=False, is_control_domain=False):
+              is_a_template=False, is_control_domain=False, host_ref=None):
     domid = status == 'Running' and random.randrange(1, 1 << 16) or -1
     return _create_object('VM',
                           {'name_label': name_label,
                            'domid': domid,
                            'power-state': status,
                            'is_a_template': is_a_template,
-                           'is_control_domain': is_control_domain})
+                           'is_control_domain': is_control_domain,
+                           'resident_on': host_ref})
 
 
 def destroy_vm(vm_ref):
@@ -505,6 +507,13 @@ class SessionBase(object):
                                                'overhead': 20,
                                                'free': 30,
                                                'free-computed': 40}, })
+        elif (plugin == 'xenhost' and method in ['host_reboot',
+                                                 'host_startup',
+                                                 'host_shutdown']):
+            return json.dumps({"power_action": method[5:]})
+        elif (plugin, method) == ('xenhost', 'set_host_enabled'):
+            enabled = 'enabled' if _5.get('enabled') == 'true' else 'disabled'
+            return json.dumps({"status": enabled})
         else:
             raise Exception('No simulation in host_call_plugin for %s,%s' %
                             (plugin, method))
@@ -690,7 +699,7 @@ class SessionBase(object):
         # Add RO fields
         if cls == 'VM':
             obj['power_state'] = 'Halted'
-
+            obj['resident_on'] = get_all('host')[0]
         return ref
 
     def _destroy(self, name, params):

@@ -494,6 +494,10 @@ class XenAPIConnection(driver.ComputeDriver):
         """Remove a compute host from an aggregate."""
         return self._pool.remove_from_aggregate(context,
                                                 aggregate, host, **kwargs)
+    def host_maintenance_mode(self, host, mode):
+        """Start/Stop host maintenance window. On start, it triggers
+        guest VMs evacuation."""
+        return self._host.host_maintenance_mode(host, mode)
 
 
 class XenAPISession(object):
@@ -665,6 +669,7 @@ class XenAPISession(object):
         except xmlrpclib.ProtocolError, exc:
             LOG.debug(_("Got exception: %s"), exc)
             raise
+
 
 def _parse_xmlrpc_value(val):
     """Parse the given value as if it were an XML-RPC value. This is
