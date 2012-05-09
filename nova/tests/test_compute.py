@@ -1370,20 +1370,20 @@ class ComputeTestCase(BaseTestCase):
         self.assertEqual(inst_ref['vm_state'], vm_states.ERROR)
         self.compute.terminate_instance(context, inst_ref['uuid'])
 
-    # TODO(JohnGar) - is this test still valid?
-    def test_pre_live_migration_instance_has_no_fixed_ip(self):
-        """Confirm raising exception if instance doesn't have fixed_ip."""
-        # creating instance testdata
-        inst_ref = self._create_fake_instance({'host': 'dummy'})
-        c = context.get_admin_context()
+    # TODO(JohnGar) - move this to somewhere else?
+#    def test_pre_live_migration_instance_has_no_fixed_ip(self):
+#        """Confirm raising exception if instance doesn't have fixed_ip."""
+#        # creating instance testdata
+#        inst_ref = self._create_fake_instance({'host': 'dummy'})
+#        c = context.get_admin_context()
+#
+#        # start test
+#        self.assertRaises(exception.FixedIpNotFoundForInstance,
+#                          self.compute.pre_live_migration,
+#                          c, inst_ref['id'], time=FakeTime())
+#        # cleanup
+#        db.instance_destroy(c, inst_ref['id'])
 
-        # start test
-        self.stubs.Set(time, 'sleep', lambda t: None)
-        self.assertRaises(exception.FixedIpNotFoundForInstance,
-                          self.compute.pre_live_migration,
-                          c, inst_ref['id'])
-        # cleanup
-        db.instance_destroy(c, inst_ref['id'])
 
     def test_pre_live_migration_works_correctly(self):
         """Confirm setup_compute_volume is called when volume is mounted."""
