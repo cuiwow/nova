@@ -359,7 +359,6 @@ class ComputeDriver(object):
         :param host: hostname that compute manager is currently running
 
         """
-        # TODO(Vek): Need to pass context in for access to auth_token
         raise NotImplementedError()
 
     def live_migration(self, ctxt, instance_ref, dest,
@@ -381,7 +380,11 @@ class ComputeDriver(object):
         :params block_migration: if true, do block migration.
 
         """
-        # TODO(Vek): Need to pass context in for access to auth_token
+        raise NotImplementedError()
+
+    def check_can_live_migrate(self, ctxt, instance_ref, dest,
+                               block_migration=False,
+                               disk_over_commit=False):
         raise NotImplementedError()
 
     def refresh_security_group_rules(self, security_group_id):

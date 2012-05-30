@@ -2073,6 +2073,167 @@ class LibvirtConnection(driver.ComputeDriver):
             LOG.info(_('Compute_service record updated for %s ') % host)
             db.compute_node_update(ctxt, compute_node_ref[0]['id'], dic)
 
+    def check_can_live_migrate(self, ctxt, instance_ref, dest,
+                               block_migration=False,
+                               disk_over_commit=False):
+        """Check if it is possible to execute live migration.
+
+        :param context: security context
+        :param instance_ref: nova.db.sqlalchemy.models.Instance object
+        :param dest: destination host
+        :param block_migration: if true, prepare for block migration
+        :param disk_over_commit: if true, allow disk over commit
+
+        """
+        # Checking dst host has enough capacities.
+        if block_migration:
+            self._assert_compute_node_has_enough_disk(context,
+                                                     instance_ref, dest,
+                                                     disk_over_commit)
+        # check if the storage is shared
+        self._live_migration_storage_check(context, instance_ref, dest,
+                                           block_migration)
+
+        # Check the CPU compatibility
+        self._check_cpu_match(context, instance_ref, dest)
+
+    def _get_compute_info(self, context, host, key):
+        """get compute node's information specified by key
+
+        :param context: security context
+        :param host: hostname(must be compute node)
+        :param key: column name of compute_nodes
+        :return: value specified by key
+
+        """
+        compute_node_ref = db.service_get_all_compute_by_host(context, host)
+        return compute_node_ref[0]['compute_node'][0]
+
+    def _assert_compute_node_has_enough_disk(self, context, instance_ref, dest,
+                                            disk_over_commit):
+        """Checks if destination host has enough disk for block migration.
+
+        :param context: security context
+        :param instance_ref: nova.db.sqlalchemy.models.Instance object
+        :param dest: destination host
+        :param disk_over_commit: if True, consider real(not virtual)
+                                 disk size.
+
+        """
+
+        # Libvirt supports qcow2 disk format,which is usually compressed
+        # on compute nodes.
+        # Real disk image (compressed) may enlarged to "virtual disk size",
+        # that is specified as the maximum disk size.
+        # (See qemu-img -f path-to-disk)
+        # Scheduler recognizes destination host still has enough disk space
+        # if real disk size < available disk size
+        # if disk_over_commit is True,
+        #  otherwise virtual disk size < available disk size.
+
+        # Getting total available disk of host
+        available_gb = self._get_compute_info(context,
+                                              dest)['disk_available_least']
+        available = available_gb * (1024 ** 3)
+
+        # Getting necessary disk size
+        topic = db.queue_get_for(context, FLAGS.compute_topic,
+                                          instance_ref['host'])
+        ret = rpc.call(context, topic,
+                       {"method": 'get_instance_disk_info',
+                        "args": {'instance_name': instance_ref['name']}})
+        disk_infos = jsonutils.loads(ret)
+
+        necessary = 0
+        if disk_over_commit:
+            for info in disk_infos:
+                necessary += int(info['disk_size'])
+        else:
+            for info in disk_infos:
+                necessary += int(info['virt_disk_size'])
+
+        # Check that available disk > necessary disk
+        if (available - necessary) < 0:
+            instance_uuid = instance_ref['uuid']
+            reason = _("Unable to migrate %(instance_uuid)s to %(dest)s: "
+                       "Lack of disk(host:%(available)s "
+                       "<= instance:%(necessary)s)")
+            raise exception.MigrationError(reason=reason % locals())
+
+    def _check_cpu_match(self, context, instance_ref, dest):
+        src = instance_ref['host']
+        oservice_ref = self._get_compute_info(context, src)
+
+        # Checking cpuinfo.
+        try:
+            rpc.call(context,
+                     db.queue_get_for(context, FLAGS.compute_topic, dest),
+                     {"method": 'compare_cpu',
+                      "args": {'cpu_info': oservice_ref['cpu_info']}})
+
+        except exception.InvalidCPUInfo:
+            src = instance_ref['host']
+            LOG.exception(_("host %(dest)s is not compatible with "
+                                "original host %(src)s.") % locals())
+            raise
+
+
+    def _live_migration_storage_check(self, context, instance_ref, dest,
+                                      block_migration):
+        """Live migration common storage check.
+
+        :param context: security context
+        :param instance_ref: nova.db.sqlalchemy.models.Instance object
+        :param dest: destination host
+        :param block_migration: if true, block_migration.
+        """
+        # Checking shared storage connectivity
+        # if block migration, instances_paths should not be on shared storage.
+        shared = self._mounted_on_same_shared_storage(context, instance_ref,
+                                                     dest)
+        if block_migration:
+            if shared:
+                reason = _("Block migration can not be used "
+                           "with shared storage.")
+                raise exception.InvalidSharedStorage(reason=reason, path=dest)
+
+        elif not shared:
+            reason = _("Live migration can not be used "
+                       "without shared storage.")
+            raise exception.InvalidSharedStorage(reason=reason, path=dest)
+
+    def _mounted_on_same_shared_storage(self, context, instance_ref, dest):
+        """Check if the src and dest host mount same shared storage.
+
+        At first, dest host creates temp file, and src host can see
+        it if they mounts same shared storage. Then src host erase it.
+
+        :param context: security context
+        :param instance_ref: nova.db.sqlalchemy.models.Instance object
+        :param dest: destination host
+
+        """
+
+        src = instance_ref['host']
+        dst_t = db.queue_get_for(context, FLAGS.compute_topic, dest)
+        src_t = db.queue_get_for(context, FLAGS.compute_topic, src)
+
+        filename = rpc.call(context, dst_t,
+                            {"method": 'create_shared_storage_test_file'})
+
+        try:
+            # make sure existence at src host.
+            ret = rpc.call(context, src_t,
+                        {"method": 'check_shared_storage_test_file',
+                        "args": {'filename': filename}})
+
+        finally:
+            rpc.cast(context, dst_t,
+                    {"method": 'cleanup_shared_storage_test_file',
+                    "args": {'filename': filename}})
+
+        return ret
+
     def compare_cpu(self, cpu_info):
         """Checks the host cpu is compatible to a cpu given by xml.
 
@@ -2253,9 +2414,12 @@ class LibvirtConnection(driver.ComputeDriver):
                                       connection_info,
                                       mountpoint)
 
+        # Call this method prior to ensure_filtering_rules_for_instance,
+        # since bridge is not set up, ensure_filtering_rules_for instance
+        # fails.
         # Retry operation is necessary because continuously request comes,
         # concorrent request occurs to iptables, then it complains.
-        max_retry = FLAGS.live_migration_retry_count
+        max_retry = FLAGS.live_migration_retry_count #TODO(johngar) move flag?
         for cnt in range(max_retry):
             try:
                 self.plug_vifs(instance_ref,

@@ -1515,30 +1515,66 @@ class VMOps(object):
 
     ########################################################################
 
-    def _get_host_opaque_ref(self, context, destination_hostname):
+    def _get_host_uuid_from_aggregate(self, context, hostname):
         current_aggregate = db.aggregate_get_by_host(context, FLAGS.host)
         try:
-            host_uuid = current_aggregate.metadetails[destination_hostname]
+            return current_aggregate.metadetails[hostname]
         except KeyError:
-            raise Exception(_("Destination must in the same aggregate "
-                              "as the current server"))
+            # TODO(johngarbutt) must find better exception
+            reason = _("Destination host:%(hostname) "
+                              "must in the same aggregate "
+                              "as the source server")
+            raise exception.MigrationError(reason=reason % locals())
 
+    def _get_host_opaque_ref(self, context, hostname):
+        host_uuid = self._get_host_uuid_from_aggregate(context, hostname)
         return self._session.call_xenapi("host.get_by_uuid", host_uuid)
+
+    def check_can_live_migrate(self, ctxt, instance_ref, dest,
+                               block_migration=False,
+                               disk_over_commit=False):
+        """Check if it is possible to execute live migration.
+
+        :param context: security context
+        :param instance_ref: nova.db.sqlalchemy.models.Instance object
+        :param dest: destination host
+        :param block_migration: if true, prepare for block migration
+        :param disk_over_commit: if true, allow disk over commit
+
+        """
+        if block_migration:
+            #TODO(JohnGarbutt): XenServer feature comming soon fixes this
+            raise NotImplementedError()
+        else:
+            # check destination is in the same aggregate
+            # joining the pool confirms most live migration
+            self._get_host_uuid_from_aggregate(context, dest)
+            # TODO(johngarbutt) we currently assume
+            # instance is on a SR shared with other destination
+            # block migration work will be able to resolve this
 
     def live_migrate(self, context, instance, destination_hostname,
                      post_method, recover_method, block_migration):
+        if block_migration:
+            #TODO(JohnGarbutt): XenServer feature comming soon fixes this
+            raise NotImplementedError()
+        else:
+            self._pool_live_migrate(context, instance, destination_hostname,
+                                    post_method, recover_method,
+                                    block_migration)
+
+    def _pool_live_migrate(self, context, instance, destination_hostname,
+                           post_method, recover_method, block_migration):
         vm_ref = self._get_vm_opaque_ref(instance)
         host_ref = self._get_host_opaque_ref(context, destination_hostname)
-
         try:
             self._session.call_xenapi("VM.pool_migrate", vm_ref, host_ref, {})
+            post_method(context, instance, destination_hostname,
+                        block_migration)
         except Exception:
             with utils.save_and_reraise_exception():
                 recover_method(context, instance, destination_hostname,
                                block_migration)
-
-        # Complete the rest of the post migration operations
-        post_method(context, instance, destination_hostname, block_migration)
 
 
 class SimpleDH(object):

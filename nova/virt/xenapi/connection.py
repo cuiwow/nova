@@ -426,6 +426,32 @@ class XenAPIConnection(driver.ComputeDriver):
         # TODO(johngarbutt): we need to implement this for live migration
         return
 
+    def check_can_live_migrate(self, ctxt, instance_ref, dest,
+                               block_migration=False,
+                               disk_over_commit=False):
+        """Check if it is possible to execute live migration.
+
+        :param context: security context
+        :param instance_ref: nova.db.sqlalchemy.models.Instance object
+        :param dest: destination host
+        :param block_migration: if true, prepare for block migration
+        :param disk_over_commit: if true, allow disk over commit
+
+        """
+        self._vmops.check_can_live_migrate(ctxt, instance_ref, dest,
+                                           block_migration,
+                                           disk_over_commit)
+        # Checking dst host has enough capacities.
+        if block_migration:
+            raise NotImplementedError()
+
+        # check if the storage is shared
+        self._live_migration_storage_check(context, instance_ref, dest,
+                                           block_migration)
+
+        # Check the CPU compatibility
+        self._check_cpu_match(context, instance_ref, dest)
+
     def live_migration(self, ctxt, instance_ref, dest,
                        post_method, recover_method, block_migration=False):
         """Performs the live migration of the specified instance.
@@ -455,8 +481,7 @@ class XenAPIConnection(driver.ComputeDriver):
             It must be the result of _get_instance_volume_bdms()
             at compute manager.
         """
-        # TODO(JohnGarbutt) need to deal with external ramdisk and kernel
-        # TODO(JohnGarbutt) should we check for aggregate membership here?
+        # TODO(JohnGarbutt) look again when boot-from-volume hits trunk
         pass
 
     def post_live_migration_at_destination(self, ctxt, instance_ref,
@@ -470,7 +495,7 @@ class XenAPIConnection(driver.ComputeDriver):
         :params network_info: instance network infomation
         :params : block_migration: if true, post operation of block_migraiton.
         """
-        # Nothing to do that is specific to the XenServer case
+        # TODO(JohnGarbutt) look at moving/downloading ramdisk and kernel
         pass
 
     def unfilter_instance(self, instance_ref, network_info):
