@@ -1370,20 +1370,25 @@ class ComputeTestCase(BaseTestCase):
         self.assertEqual(inst_ref['vm_state'], vm_states.ERROR)
         self.compute.terminate_instance(context, inst_ref['uuid'])
 
-    # TODO(JohnGar) - move this to somewhere else?
-#    def test_pre_live_migration_instance_has_no_fixed_ip(self):
-#        """Confirm raising exception if instance doesn't have fixed_ip."""
-#        # creating instance testdata
-#        inst_ref = self._create_fake_instance({'host': 'dummy'})
-#        c = context.get_admin_context()
-#
-#        # start test
-#        self.assertRaises(exception.FixedIpNotFoundForInstance,
-#                          self.compute.pre_live_migration,
-#                          c, inst_ref['id'], time=FakeTime())
-#        # cleanup
-#        db.instance_destroy(c, inst_ref['id'])
+    def test_check_can_live_migrate_works_correctly(self):
+        """Confirm check_can_live_migrate works on positive path"""
+        context = self.context.elevated()
+        inst_ref = self._create_fake_instance({'host': 'fake_host_2'})
+        inst_id = inst_ref["id"]
+        dest = "fake_host_1"
 
+        self.mox.StubOutWithMock(self.compute.driver, 'check_can_live_migrate')
+        self.mox.StubOutWithMock(self.compute.db, 'instance_get')
+
+        self.compute.db.instance_get(context, inst_id).AndReturn(inst_ref)
+        self.compute.driver.check_can_live_migrate(context, inst_ref, dest,
+                                                   True, False)
+
+        self.mox.ReplayAll()
+        self.compute.check_can_live_migrate(context, inst_id,
+                                            dest, True, False)
+
+        db.instance_destroy(context, inst_ref['id'])
 
     def test_pre_live_migration_works_correctly(self):
         """Confirm setup_compute_volume is called when volume is mounted."""

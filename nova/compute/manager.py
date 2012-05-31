@@ -1949,7 +1949,7 @@ class ComputeManager(manager.SchedulerDependentManager):
         :param disk_over_commit: if true, allow disk over commit
 
         """
-        instance_ref = self.db.instance_get(context, instance_id)
+        instance_ref = self.db.instance_get(ctxt, instance_id)
         self.driver.check_can_live_migrate(ctxt, instance_ref,
                                            dest, block_migration,
                                            disk_over_commit)
