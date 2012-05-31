@@ -441,16 +441,6 @@ class XenAPIConnection(driver.ComputeDriver):
         self._vmops.check_can_live_migrate(ctxt, instance_ref, dest,
                                            block_migration,
                                            disk_over_commit)
-        # Checking dst host has enough capacities.
-        if block_migration:
-            raise NotImplementedError()
-
-        # check if the storage is shared
-        self._live_migration_storage_check(context, instance_ref, dest,
-                                           block_migration)
-
-        # Check the CPU compatibility
-        self._check_cpu_match(context, instance_ref, dest)
 
     def live_migration(self, ctxt, instance_ref, dest,
                        post_method, recover_method, block_migration=False):

@@ -1931,6 +1931,18 @@ class XenAPILiveMigrateTestCase(test.TestCase):
         # ensure method is present
         self.conn.post_live_migration_at_destination(None, None, None, None)
 
+    def test_check_can_live_migrate_raises_on_block_migrate(self):
+        self.assertRaises(NotImplementedError,
+                          self.conn.check_can_live_migrate,
+                          None, None, None, True, None)
+
+    def test_check_can_live_migrate_works(self):
+        def fake_get_host_uuid_from_aggregate(context, host):
+            self.assertEqual("dest", host)
+        self.stubs.Set(self.conn._vmops, "_get_host_uuid_from_aggregate",
+                      fake_get_host_uuid_from_aggregate)
+        self.conn.check_can_live_migrate(None, None, "dest", None, None)
+
     def test_live_migration(self):
         def fake_get_vm_opaque_ref(instance):
             return "fake_vm"

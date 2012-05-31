@@ -40,6 +40,7 @@ from nova import exception
 from nova import flags
 from nova import log as logging
 from nova.openstack.common import cfg
+from nova.openstack.common import excutils
 from nova.openstack.common import importutils
 from nova import utils
 from nova.virt import driver
@@ -1548,7 +1549,7 @@ class VMOps(object):
         else:
             # check destination is in the same aggregate
             # joining the pool confirms most live migration
-            self._get_host_uuid_from_aggregate(context, dest)
+            self._get_host_uuid_from_aggregate(ctxt, dest)
             # TODO(johngarbutt) we currently assume
             # instance is on a SR shared with other destination
             # block migration work will be able to resolve this
@@ -1572,7 +1573,7 @@ class VMOps(object):
             post_method(context, instance, destination_hostname,
                         block_migration)
         except Exception:
-            with utils.save_and_reraise_exception():
+            with excutils.save_and_reraise_exception():
                 recover_method(context, instance, destination_hostname,
                                block_migration)
 
