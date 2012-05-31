@@ -214,15 +214,9 @@ class Scheduler(object):
         self._live_migration_src_check(context, instance_ref)
         self._live_migration_dest_check(context, instance_ref, dest)
         self._live_migration_common_check(context, instance_ref, dest)
-
-        # Perform compute driver specific checks
-        src = instance_ref['host']
-        ret = rpc.call(context, src,
-                    {"method": 'check_can_live_migrate',
-                    "args": {'instace_id': instance_id,
-                             'dest': dest,
-                             'block_migration': block_migration,
-                             'disk_over_commit': disk_over_commit}})
+        self._compute_driver_check_can_live_migrate(context, instance_ref,
+                                                    dest, block_migration,
+                                                    disk_over_commit)
 
         # Change instance_state
         values = {"vm_state": vm_states.MIGRATING}
@@ -252,15 +246,15 @@ class Scheduler(object):
                     instance_id=instance_ref['uuid'])
 
         # Checking src host exists and compute node
+        src = instance_ref['host']
         try:
-            src = instance_ref['host']
             services = db.service_get_all_compute_by_host(context, src)
         except exception.NotFound:
-            raise exception.SourceHostUnavailable()
+            raise exception.ComputeServiceUnavailable(host=src)
 
         # Checking src host is alive.
         if not utils.service_is_up(services[0]):
-            raise exception.SourceHostUnavailable()
+            raise exception.ComputeServiceUnavailable(host=src)
 
     def _live_migration_dest_check(self, context, instance_ref, dest):
         """Live migration check routine (for destination host).
@@ -315,6 +309,18 @@ class Scheduler(object):
         if orig_hypervisor > dest_hypervisor:
             raise exception.DestinationHypervisorTooOld()
 
+    def _compute_driver_check_can_live_migrate(self, context, instance_ref,
+                                               dest, block_migration,
+                                               disk_over_commit):
+        # Perform compute driver specific checks
+        src = instance_ref['host']
+        rpc.call(context, src,
+                   {"method": 'check_can_live_migrate',
+                    "args": {'instace_id': instance_ref['id'],
+                             'dest': dest,
+                             'block_migration': block_migration,
+                             'disk_over_commit': disk_over_commit}})
+
     def _assert_compute_node_has_enough_memory(self, context,
                                               instance_ref, dest):
         """Checks if destination host has enough memory for live migration.
@@ -343,7 +349,7 @@ class Scheduler(object):
                        "instance:%(mem_inst)s)")
             raise exception.MigrationError(reason=reason % locals())
 
-    def _get_compute_info(self, context, host, key):
+    def _get_compute_info(self, context, host):
         """get compute node's information specified by key
 
         :param context: security context
