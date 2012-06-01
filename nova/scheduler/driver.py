@@ -314,9 +314,10 @@ class Scheduler(object):
                                                disk_over_commit):
         # Perform compute driver specific checks
         src = instance_ref['host']
-        rpc.call(context, src,
+        queue = db.queue_get_for(context, FLAGS.compute_topic, src)
+        rpc.call(context, queue,
                    {"method": 'check_can_live_migrate',
-                    "args": {'instace_id': instance_ref['id'],
+                    "args": {'instance_id': instance_ref['id'],
                              'dest': dest,
                              'block_migration': block_migration,
                              'disk_over_commit': disk_over_commit}})

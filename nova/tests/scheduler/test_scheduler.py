@@ -505,9 +505,11 @@ class SchedulerTestCase(test.TestCase):
                                         'hypervisor_version': 1,
                                         'cpu_info': 'fake_cpu_info'}]}])
 
-        rpc.call(self.context, instance['host'],
+        db.queue_get_for(self.context, FLAGS.compute_topic,
+                         instance['host']).AndReturn("queue")
+        rpc.call(self.context, "queue",
                    {"method": 'check_can_live_migrate',
-                    "args": {'instace_id': instance['id'],
+                    "args": {'instance_id': instance['id'],
                              'dest': dest,
                              'block_migration': block_migration,
                              'disk_over_commit': disk_over_commit}})
