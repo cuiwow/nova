@@ -63,6 +63,7 @@ from nova import db
 from nova import exception
 from nova import flags
 import nova.image
+from nova import rpc
 from nova import log as logging
 from nova.openstack.common import cfg
 from nova.openstack.common import excutils
@@ -2087,17 +2088,17 @@ class LibvirtConnection(driver.ComputeDriver):
         """
         # Checking dst host has enough capacities.
         if block_migration:
-            self._assert_compute_node_has_enough_disk(context,
+            self._assert_compute_node_has_enough_disk(ctxt,
                                                      instance_ref, dest,
                                                      disk_over_commit)
         # check if the storage is shared
-        self._live_migration_storage_check(context, instance_ref, dest,
+        self._live_migration_storage_check(ctxt, instance_ref, dest,
                                            block_migration)
 
         # Check the CPU compatibility
-        self._check_cpu_match(context, instance_ref, dest)
+        self._check_cpu_match(ctxt, instance_ref, dest)
 
-    def _get_compute_info(self, context, host, key):
+    def _get_compute_info(self, context, host):
         """get compute node's information specified by key
 
         :param context: security context
@@ -2136,12 +2137,7 @@ class LibvirtConnection(driver.ComputeDriver):
                                               dest)['disk_available_least']
         available = available_gb * (1024 ** 3)
 
-        # Getting necessary disk size
-        topic = db.queue_get_for(context, FLAGS.compute_topic,
-                                          instance_ref['host'])
-        ret = rpc.call(context, topic,
-                       {"method": 'get_instance_disk_info',
-                        "args": {'instance_name': instance_ref['name']}})
+        ret = self.get_instance_disk_info(context, instance_ref['name'])
         disk_infos = jsonutils.loads(ret)
 
         necessary = 0
