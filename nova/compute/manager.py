@@ -1936,7 +1936,6 @@ class ComputeManager(manager.SchedulerDependentManager):
         """
         return self.driver.get_instance_disk_info(instance_name)
 
-
     def check_can_live_migrate(self, ctxt, instance_id, dest,
                                block_migration=False,
                                disk_over_commit=False):

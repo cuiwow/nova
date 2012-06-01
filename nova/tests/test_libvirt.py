@@ -1272,15 +1272,19 @@ class LibvirtConnTestCase(test.TestCase):
         self.mox.StubOutWithMock(rpc, 'cast')
 
         conn._get_compute_info(self.context, "fake_host_2").AndReturn(
-                                              {'disk_available_least':400})
+                                              {'disk_available_least': 400})
         conn.get_instance_disk_info(self.context,
                                     instance_ref["name"]).AndReturn(
                                             '[{"virt_disk_size":2}]')
         # mounted_on_same_shared_storage
-        db.queue_get_for(self.context, FLAGS.compute_topic, dest).AndReturn("dest")
-        db.queue_get_for(self.context, FLAGS.compute_topic, instance_ref['host']).AndReturn("src")
+        db.queue_get_for(self.context, FLAGS.compute_topic, dest).AndReturn(
+                                                                        "dest")
+        db.queue_get_for(self.context, FLAGS.compute_topic,
+                         instance_ref['host']).AndReturn("src")
         filename = "file"
-        rpc.call(self.context, "dest", {"method": 'create_shared_storage_test_file'}).AndReturn(filename)
+        rpc.call(self.context, "dest",
+                 {"method": 'create_shared_storage_test_file'}
+                ).AndReturn(filename)
         rpc.call(self.context, "src",
                         {"method": 'check_shared_storage_test_file',
                         "args": {'filename': filename}})
@@ -1289,8 +1293,10 @@ class LibvirtConnTestCase(test.TestCase):
                     "args": {'filename': filename}})
 
         # _check_cpu_match
-        conn._get_compute_info(self.context, src).AndReturn({'cpu_info':"asdf"})
-        db.queue_get_for(self.context, FLAGS.compute_topic, dest).AndReturn("dest")
+        conn._get_compute_info(self.context,
+                               src).AndReturn({'cpu_info':"asdf"})
+        db.queue_get_for(self.context,
+                         FLAGS.compute_topic, dest).AndReturn("dest")
         rpc.call(self.context, "dest",
                      {"method": 'compare_cpu',
                       "args": {'cpu_info': "asdf"}})

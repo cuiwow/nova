@@ -360,4 +360,3 @@ class Scheduler(object):
         """
         compute_node_ref = db.service_get_all_compute_by_host(context, host)
         return compute_node_ref[0]['compute_node'][0]
-

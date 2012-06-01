@@ -63,12 +63,12 @@ from nova import db
 from nova import exception
 from nova import flags
 import nova.image
-from nova import rpc
 from nova import log as logging
 from nova.openstack.common import cfg
 from nova.openstack.common import excutils
 from nova.openstack.common import importutils
 from nova.openstack.common import jsonutils
+from nova import rpc
 from nova import utils
 from nova.virt.disk import api as disk
 from nova.virt import driver
@@ -2173,7 +2173,6 @@ class LibvirtConnection(driver.ComputeDriver):
                                 "original host %(src)s.") % locals())
             raise
 
-
     def _live_migration_storage_check(self, context, instance_ref, dest,
                                       block_migration):
         """Live migration common storage check.
@@ -2415,7 +2414,7 @@ class LibvirtConnection(driver.ComputeDriver):
         # fails.
         # Retry operation is necessary because continuously request comes,
         # concorrent request occurs to iptables, then it complains.
-        max_retry = FLAGS.live_migration_retry_count #TODO(johngar) move flag?
+        max_retry = FLAGS.live_migration_retry_count
         for cnt in range(max_retry):
             try:
                 self.plug_vifs(instance_ref,
