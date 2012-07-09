@@ -1942,10 +1942,14 @@ class ComputeManager(manager.SchedulerDependentManager):
         """
         return self.driver.get_instance_disk_info(instance_name)
 
-    def check_can_live_migrate(self, ctxt, instance_id, destination,
-                               block_migration=False,
-                               disk_over_commit=False):
+    def check_can_live_migrate_destination(self, ctxt, instance_id,
+                                           destination,
+                                           block_migration=False,
+                                           disk_over_commit=False):
         """Check if it is possible to execute live migration.
+
+        This runs checks on the destination host, and then calls
+        back to the source host to check the results.
 
         :param context: security context
         :param instance_id: nova.db.sqlalchemy.models.Instance.Id
@@ -1955,8 +1959,36 @@ class ComputeManager(manager.SchedulerDependentManager):
 
         """
         instance_ref = self.db.instance_get(ctxt, instance_id)
-        self.driver.check_can_live_migrate(ctxt, instance_ref, destination,
-                                           block_migration, disk_over_commit)
+        dest_check_data = self.driver.check_can_live_migrate_source(ctxt,
+            instance_ref, destination, block_migration, disk_over_commit)
+
+        try:
+            self.compute_rpcapi.check_can_live_migrate_source(ctxt,
+                instance_ref, block_migration, disk, dest, dest_check_data)
+        finally:
+            self.driver.check_can_live_migrate_source_cleanup(ctxt,
+                instance_ref, destination, block_migration, disk_over_commit)
+
+    def check_can_live_migrate_source(self, ctxt, instance_id, destination,
+                                      block_migration=False,
+                                      disk_over_commit=False,
+                                      dest_check_data=None):
+        """Check if it is possible to execute live migration.
+
+        This checks if the live migration can succeed, based on the results
+        from check_can_live_migrate_destination.
+
+        :param context: security context
+        :param instance_id: nova.db.sqlalchemy.models.Instance.Id
+        :param dest: destination host
+        :param block_migration: if true, prepare for block migration
+        :param disk_over_commit: if true, allow disk over commit
+        :param dest_check_data: result of check_can_live_migrate_destination
+
+        """
+        instance_ref = self.db.instance_get(ctxt, instance_id)
+        self.driver.check_can_live_migrate_source(ctxt, instance_ref,
+            destination, block_migration, disk_over_commit, data_from_dest)
 
     def pre_live_migration(self, context, instance_id,
                            block_migration=False, disk=None):
