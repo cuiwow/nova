@@ -442,7 +442,7 @@ class SchedulerTestCase(test.TestCase):
         self.mox.StubOutWithMock(self.driver, '_live_migration_dest_check')
         self.mox.StubOutWithMock(self.driver, '_live_migration_common_check')
         self.mox.StubOutWithMock(self.driver.compute_rpcapi,
-                                 'check_can_live_migrate')
+                                 'check_can_live_migrate_destination')
         self.mox.StubOutWithMock(db, 'instance_update_and_get_original')
         self.mox.StubOutWithMock(driver, 'cast_to_compute_host')
         self.mox.StubOutWithMock(notifications, 'send_update')
@@ -460,7 +460,7 @@ class SchedulerTestCase(test.TestCase):
         self.driver._live_migration_dest_check(self.context, instance, dest)
         self.driver._live_migration_common_check(self.context, instance,
                                                  dest)
-        self.driver.compute_rpcapi.check_can_live_migrate(self.context,
+        self.driver.compute_rpcapi.check_can_live_migrate_destination(self.context,
                           instance, dest, block_migration, disk_over_commit)
         db.instance_update_and_get_original(self.context, instance_uuid,
                 {"task_state": task_states.MIGRATING}).AndReturn(
@@ -550,7 +550,7 @@ class SchedulerTestCase(test.TestCase):
                                         'cpu_info': 'fake_cpu_info'}]}])
 
         rpc.call(self.context, "compute.fake_host1",
-                   {"method": 'check_can_live_migrate',
+                   {"method": 'check_can_live_migrate_destination',
                     "args": {'instance_id': instance_id,
                              'destination': dest,
                              'block_migration': block_migration,

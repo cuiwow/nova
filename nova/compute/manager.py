@@ -1959,14 +1959,14 @@ class ComputeManager(manager.SchedulerDependentManager):
 
         """
         instance_ref = self.db.instance_get(ctxt, instance_id)
-        dest_check_data = self.driver.check_can_live_migrate_source(ctxt,
+        dest_check_data = self.driver.check_can_live_migrate_destination(ctxt,
             instance_ref, destination, block_migration, disk_over_commit)
-
         try:
             self.compute_rpcapi.check_can_live_migrate_source(ctxt,
-                instance_ref, block_migration, disk, dest, dest_check_data)
+                instance_ref, destination, block_migration, disk_over_commit,
+                dest_check_data)
         finally:
-            self.driver.check_can_live_migrate_source_cleanup(ctxt,
+            self.driver.check_can_live_migrate_destination_cleanup(ctxt,
                 instance_ref, destination, block_migration, disk_over_commit)
 
     def check_can_live_migrate_source(self, ctxt, instance_id, destination,
@@ -1988,7 +1988,7 @@ class ComputeManager(manager.SchedulerDependentManager):
         """
         instance_ref = self.db.instance_get(ctxt, instance_id)
         self.driver.check_can_live_migrate_source(ctxt, instance_ref,
-            destination, block_migration, disk_over_commit, data_from_dest)
+            destination, block_migration, disk_over_commit, dest_check_data)
 
     def pre_live_migration(self, context, instance_id,
                            block_migration=False, disk=None):

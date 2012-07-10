@@ -378,9 +378,51 @@ class ComputeDriver(object):
         """
         raise NotImplementedError()
 
-    def check_can_live_migrate(self, ctxt, instance_ref, dest,
-                               block_migration=False,
-                               disk_over_commit=False):
+    def check_can_live_migrate_destination(self, ctxt, instance_ref, dest,
+                                           block_migration=False,
+                                           disk_over_commit=False):
+        """Check if it is possible to execute live migration.
+
+        This runs checks on the destination host, and then calls
+        back to the source host to check the results.
+
+        :param ctxt: security context
+        :param instance_ref: nova.db.sqlalchemy.models.Instance
+        :param dest: destination host
+        :param block_migration: if true, prepare for block migration
+        :param disk_over_commit: if true, allow disk over commit
+        """
+        raise NotImplementedError()
+
+    def check_can_live_migrate_destination_cleanup(self, ctxt, instance_ref,
+                                                   dest, block_migration=False,
+                                                   disk_over_commit=False):
+        """Do required cleanup on dest host after check_can_live_migrate calls
+
+        :param ctxt: security context
+        :param instance_ref: nova.db.sqlalchemy.models.Instance
+        :param dest: destination host
+        :param block_migration: if true, prepare for block migration
+        :param disk_over_commit: if true, allow disk over commit
+        """
+        raise NotImplementedError()
+
+    def check_can_live_migrate_source(self, ctxt, instance_ref, destination,
+                                      block_migration=False,
+                                      disk_over_commit=False,
+                                      dest_check_data=None):
+        """Check if it is possible to execute live migration.
+
+        This checks if the live migration can succeed, based on the results
+        from check_can_live_migrate_destination.
+
+        :param context: security context
+        :param instance_ref: nova.db.sqlalchemy.models.Instance
+        :param dest: destination host
+        :param block_migration: if true, prepare for block migration
+        :param disk_over_commit: if true, allow disk over commit
+        :param dest_check_data: result of check_can_live_migrate_destination
+        """
         raise NotImplementedError()
 
     def refresh_security_group_rules(self, security_group_id):

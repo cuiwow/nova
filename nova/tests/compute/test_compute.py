@@ -1380,23 +1380,102 @@ class ComputeTestCase(BaseTestCase):
         self.assertEqual(inst_ref['vm_state'], vm_states.ERROR)
         self.compute.terminate_instance(context, inst_ref['uuid'])
 
-    def test_check_can_live_migrate_works_correctly(self):
-        """Confirm check_can_live_migrate works on positive path"""
+    def test_check_can_live_migrate_source_works_correctly(self):
+        """Confirm check_can_live_migrate_source works on positive path"""
         context = self.context.elevated()
         inst_ref = self._create_fake_instance({'host': 'fake_host_2'})
         inst_id = inst_ref["id"]
         dest = "fake_host_1"
 
         self.mox.StubOutWithMock(db, 'instance_get')
-        self.mox.StubOutWithMock(self.compute.driver, 'check_can_live_migrate')
+        self.mox.StubOutWithMock(self.compute.driver,
+                                 'check_can_live_migrate_source')
 
         db.instance_get(context, inst_id).AndReturn(inst_ref)
-        self.compute.driver.check_can_live_migrate(context, inst_ref, dest,
-                                                   True, False)
+        self.compute.driver.check_can_live_migrate_source(context, inst_ref,
+                dest, True, False, None)
 
         self.mox.ReplayAll()
-        self.compute.check_can_live_migrate(context, inst_id,
-                                            dest, True, False)
+        self.compute.check_can_live_migrate_source(context, inst_id, dest,
+                                                   True, False, None)
+
+    def test_check_can_live_migrate_destination_works_correctly(self):
+        """Confirm check_can_live_migrate_destination works on positive path"""
+        context = self.context.elevated()
+        inst_ref = self._create_fake_instance({'host': 'fake_host_2'})
+        inst_id = inst_ref["id"]
+        dest = "fake_host_1"
+
+        self.mox.StubOutWithMock(db, 'instance_get')
+        self.mox.StubOutWithMock(self.compute.driver,
+                                 'check_can_live_migrate_destination')
+        self.mox.StubOutWithMock(self.compute.compute_rpcapi,
+                                 'check_can_live_migrate_source')
+        self.mox.StubOutWithMock(self.compute.driver,
+                                 'check_can_live_migrate_destination_cleanup')
+
+        db.instance_get(context, inst_id).AndReturn(inst_ref)
+        dest_check_data = {"test": "data"}
+        self.compute.driver.check_can_live_migrate_destination(context,
+                inst_ref, dest, True, False).AndReturn(dest_check_data)
+        self.compute.compute_rpcapi.check_can_live_migrate_source(context,
+                inst_ref, dest, True, False, dest_check_data)
+        self.compute.driver.check_can_live_migrate_destination_cleanup(
+                context, inst_ref, dest, True, False)
+
+        self.mox.ReplayAll()
+        self.compute.check_can_live_migrate_destination(context, inst_id, dest,
+                                                        True, False)
+
+    def test_check_can_live_migrate_destination_fails_dest_check(self):
+        """Confirm check_can_live_migrate_destination works on positive path"""
+        context = self.context.elevated()
+        inst_ref = self._create_fake_instance({'host': 'fake_host_2'})
+        inst_id = inst_ref["id"]
+        dest = "fake_host_1"
+
+        self.mox.StubOutWithMock(db, 'instance_get')
+        self.mox.StubOutWithMock(self.compute.driver,
+                                 'check_can_live_migrate_destination')
+
+        db.instance_get(context, inst_id).AndReturn(inst_ref)
+        self.compute.driver.check_can_live_migrate_destination(context,
+                inst_ref, dest, True, False).AndRaise(exception.Invalid())
+
+        self.mox.ReplayAll()
+        self.assertRaises(exception.Invalid,
+                          self.compute.check_can_live_migrate_destination,
+                          context, inst_id, dest, True, False)
+
+    def test_check_can_live_migrate_destination_fails_source(self):
+        """Confirm check_can_live_migrate_destination works on positive path"""
+        context = self.context.elevated()
+        inst_ref = self._create_fake_instance({'host': 'fake_host_2'})
+        inst_id = inst_ref["id"]
+        dest = "fake_host_1"
+
+        self.mox.StubOutWithMock(db, 'instance_get')
+        self.mox.StubOutWithMock(self.compute.driver,
+                                 'check_can_live_migrate_destination')
+        self.mox.StubOutWithMock(self.compute.compute_rpcapi,
+                                 'check_can_live_migrate_source')
+        self.mox.StubOutWithMock(self.compute.driver,
+                                 'check_can_live_migrate_destination_cleanup')
+
+        db.instance_get(context, inst_id).AndReturn(inst_ref)
+        dest_check_data = {"test": "data"}
+        self.compute.driver.check_can_live_migrate_destination(context,
+                inst_ref, dest, True, False).AndReturn(dest_check_data)
+        self.compute.compute_rpcapi.check_can_live_migrate_source(context,
+                inst_ref, dest, True, False, dest_check_data).AndRaise(
+                                                           exception.Invalid())
+        self.compute.driver.check_can_live_migrate_destination_cleanup(
+                context, inst_ref, dest, True, False)
+
+        self.mox.ReplayAll()
+        self.assertRaises(exception.Invalid,
+                          self.compute.check_can_live_migrate_destination,
+                          context, inst_id, dest, True, False)
 
     def test_pre_live_migration_instance_has_no_fixed_ip(self):
         """Confirm raising exception if instance doesn't have fixed_ip."""
