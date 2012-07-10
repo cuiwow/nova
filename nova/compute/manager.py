@@ -1874,63 +1874,6 @@ class ComputeManager(manager.SchedulerDependentManager):
         except exception.NotFound:
             pass
 
-    @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
-    def compare_cpu(self, context, cpu_info):
-        """Checks that the host cpu is compatible with a cpu given by xml.
-
-        :param context: security context
-        :param cpu_info: json string obtained from virConnect.getCapabilities
-        :returns: See driver.compare_cpu
-
-        """
-        return self.driver.compare_cpu(cpu_info)
-
-    @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
-    def create_shared_storage_test_file(self, context):
-        """Makes tmpfile under FLAGS.instance_path.
-
-        This method enables compute nodes to recognize that they mounts
-        same shared storage. (create|check|creanup)_shared_storage_test_file()
-        is a pair.
-
-        :param context: security context
-        :returns: tmpfile name(basename)
-
-        """
-        dirpath = FLAGS.instances_path
-        fd, tmp_file = tempfile.mkstemp(dir=dirpath)
-        LOG.debug(_("Creating tmpfile %s to notify to other "
-                    "compute nodes that they should mount "
-                    "the same storage.") % tmp_file)
-        os.close(fd)
-        return os.path.basename(tmp_file)
-
-    @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
-    def check_shared_storage_test_file(self, context, filename):
-        """Confirms existence of the tmpfile under FLAGS.instances_path.
-           Cannot confirm tmpfile return False.
-
-        :param context: security context
-        :param filename: confirm existence of FLAGS.instances_path/thisfile
-
-        """
-        tmp_file = os.path.join(FLAGS.instances_path, filename)
-        if not os.path.exists(tmp_file):
-            return False
-        else:
-            return True
-
-    @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
-    def cleanup_shared_storage_test_file(self, context, filename):
-        """Removes existence of the tmpfile under FLAGS.instances_path.
-
-        :param context: security context
-        :param filename: remove existence of FLAGS.instances_path/thisfile
-
-        """
-        tmp_file = os.path.join(FLAGS.instances_path, filename)
-        os.remove(tmp_file)
-
     def get_instance_disk_info(self, context, instance_name):
         """Getting infomation of instance's current disk.
 

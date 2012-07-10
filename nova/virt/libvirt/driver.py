@@ -2197,29 +2197,77 @@ class LibvirtDriver(driver.ComputeDriver):
             LOG.info(_('Compute_service record updated for %s ') % host)
             db.compute_node_update(ctxt, compute_node_ref[0]['id'], dic)
 
-    def check_can_live_migrate(self, ctxt, instance_ref, dest,
-                               block_migration=False,
-                               disk_over_commit=False):
+    def check_can_live_migrate_destination(self, ctxt, instance_ref,
+                                           block_migration=False,
+                                           disk_over_commit=False):
         """Check if it is possible to execute live migration.
 
-        :param context: security context
-        :param instance_ref: nova.db.sqlalchemy.models.Instance object
+        This runs checks on the destination host, and then calls
+        back to the source host to check the results.
+
+        :param ctxt: security context
+        :param instance_ref: nova.db.sqlalchemy.models.Instance
         :param dest: destination host
         :param block_migration: if true, prepare for block migration
         :param disk_over_commit: if true, allow disk over commit
-
         """
-        # Checking dst host has enough capacities.
         if block_migration:
             self._assert_compute_node_has_enough_disk(ctxt,
-                                                     instance_ref, dest,
+                                                     instance_ref,
                                                      disk_over_commit)
-        # check if the storage is shared
-        self._live_migration_storage_check(ctxt, instance_ref, dest,
-                                           block_migration)
+        # Compare CPU
+        src = instance_ref['host']
+        source_cpu_info = self._get_compute_info(context, src)['cpu_info']
+        self._compare_cpu(context, source_cpu_info)
 
-        # Check the CPU compatibility
-        self._check_cpu_match(ctxt, instance_ref, dest)
+        # Create file on storage, to be checked on source host
+        filename = self._create_shared_storage_test_file(context, dest)
+
+        return {"filename": filename, "block_migration": block_migration}
+
+    def check_can_live_migrate_destination_cleanup(self, ctxt,
+                                                   dest_check_data):
+        """Do required cleanup on dest host after check_can_live_migrate calls
+
+        :param ctxt: security context
+        :param instance_ref: nova.db.sqlalchemy.models.Instance
+        :param dest: destination host
+        :param block_migration: if true, prepare for block migration
+        :param disk_over_commit: if true, allow disk over commit
+        """
+        filename = dest_check_data["filename"]
+        self._cleanup_shared_storage_test_file(ctxt, filename)
+
+    def check_can_live_migrate_source(self, ctxt, dest_check_data):
+        """Check if it is possible to execute live migration.
+
+        This checks if the live migration can succeed, based on the results
+        from check_can_live_migrate_destination.
+
+        :param context: security context
+        :param instance_ref: nova.db.sqlalchemy.models.Instance
+        :param dest: destination host
+        :param block_migration: if true, prepare for block migration
+        :param disk_over_commit: if true, allow disk over commit
+        :param dest_check_data: result of check_can_live_migrate_destination
+        """
+        # Checking shared storage connectivity
+        # if block migration, instances_paths should not be on shared storage.
+        filename = dest_check_data["filename"]
+        block_migration = dest_check_data["block_migration"]
+
+        shared = self._check_shared_storage_test_file(context, filename, src)
+
+        if block_migration:
+            if shared:
+                reason = _("Block migration can not be used "
+                           "with shared storage.")
+                raise exception.InvalidSharedStorage(reason=reason, path=dest)
+
+        elif not shared:
+            reason = _("Live migration can not be used "
+                       "without shared storage.")
+            raise exception.InvalidSharedStorage(reason=reason, path=dest)
 
     def _get_compute_info(self, context, host):
         """get compute node's information specified by key
@@ -2233,9 +2281,9 @@ class LibvirtDriver(driver.ComputeDriver):
         compute_node_ref = db.service_get_all_compute_by_host(context, host)
         return compute_node_ref[0]['compute_node'][0]
 
-    def _assert_compute_node_has_enough_disk(self, context, instance_ref, dest,
-                                            disk_over_commit):
-        """Checks if destination host has enough disk for block migration.
+    def _assert_compute_node_has_enough_disk(self, context, instance_ref,
+                                             disk_over_commit):
+        """Checks if host has enough disk for block migration.
 
         :param context: security context
         :param instance_ref: nova.db.sqlalchemy.models.Instance object
@@ -2244,7 +2292,6 @@ class LibvirtDriver(driver.ComputeDriver):
                                  disk size.
 
         """
-
         # Libvirt supports qcow2 disk format,which is usually compressed
         # on compute nodes.
         # Real disk image (compressed) may enlarged to "virtual disk size",
@@ -2257,7 +2304,7 @@ class LibvirtDriver(driver.ComputeDriver):
 
         # Getting total available disk of host
         available_gb = self._get_compute_info(context,
-                                              dest)['disk_available_least']
+                                            FLAGS.host)['disk_available_least']
         available = available_gb * (1024 ** 3)
 
         ret = self.get_instance_disk_info(instance_ref['name'])
@@ -2279,72 +2326,7 @@ class LibvirtDriver(driver.ComputeDriver):
                        "<= instance:%(necessary)s)")
             raise exception.MigrationError(reason=reason % locals())
 
-    def _check_cpu_match(self, context, instance_ref, dest):
-        src = instance_ref['host']
-        oservice_ref = self._get_compute_info(context, src)
-
-        # Checking cpuinfo.
-        try:
-            self.compute_rpcapi.compare_cpu(context,
-                                            oservice_ref['cpu_info'], dest)
-        except exception.InvalidCPUInfo:
-            src = instance_ref['host']
-            LOG.exception(_("host %(dest)s is not compatible with "
-                            "original host %(src)s.") % locals())
-            raise
-
-    def _live_migration_storage_check(self, context, instance_ref, dest,
-                                      block_migration):
-        """Live migration common storage check.
-
-        :param context: security context
-        :param instance_ref: nova.db.sqlalchemy.models.Instance object
-        :param dest: destination host
-        :param block_migration: if true, block_migration.
-        """
-        # Checking shared storage connectivity
-        # if block migration, instances_paths should not be on shared storage.
-        shared = self._mounted_on_same_shared_storage(context, instance_ref,
-                                                     dest)
-        if block_migration:
-            if shared:
-                reason = _("Block migration can not be used "
-                           "with shared storage.")
-                raise exception.InvalidSharedStorage(reason=reason, path=dest)
-
-        elif not shared:
-            reason = _("Live migration can not be used "
-                       "without shared storage.")
-            raise exception.InvalidSharedStorage(reason=reason, path=dest)
-
-    def _mounted_on_same_shared_storage(self, context, instance_ref, dest):
-        """Check if the src and dest host mount same shared storage.
-
-        At first, dest host creates temp file, and src host can see
-        it if they mounts same shared storage. Then src host erase it.
-
-        :param context: security context
-        :param instance_ref: nova.db.sqlalchemy.models.Instance object
-        :param dest: destination host
-
-        """
-
-        src = instance_ref['host']
-
-        # TODO(johngarbutt) - can the two calls not become local calls
-        # then do RPC for just the check?
-        filename = self.compute_rpcapi.\
-                    create_shared_storage_test_file(context, dest)
-        try:
-            ret = self.compute_rpcapi.\
-                    check_shared_storage_test_file(context, filename, src)
-        finally:
-            self.compute_rpcapi.\
-                    cleanup_shared_storage_test_file(context, filename, dest)
-
-        return ret
-
-    def compare_cpu(self, cpu_info):
+    def _compare_cpu(self, cpu_info):
         """Checks the host cpu is compatible to a cpu given by xml.
 
         "xml" must be a part of libvirt.openReadonly().getCapabilities().
@@ -2356,9 +2338,7 @@ class LibvirtDriver(driver.ComputeDriver):
         :returns:
             None. if given cpu info is not compatible to this server,
             raise exception.
-
         """
-
         info = jsonutils.loads(cpu_info)
         LOG.info(_('Instance launched has CPU info:\n%s') % cpu_info)
         cpu = config.LibvirtConfigCPU()
@@ -2382,7 +2362,32 @@ class LibvirtDriver(driver.ComputeDriver):
             raise
 
         if ret <= 0:
+            LOG.error(reason=m % locals())
             raise exception.InvalidCPUInfo(reason=m % locals())
+
+    def _create_shared_storage_test_file(self, context):
+        """Makes tmpfile under FLAGS.instance_path."""
+        dirpath = FLAGS.instances_path
+        fd, tmp_file = tempfile.mkstemp(dir=dirpath)
+        LOG.debug(_("Creating tmpfile %s to notify to other "
+                    "compute nodes that they should mount "
+                    "the same storage.") % tmp_file)
+        os.close(fd)
+        return os.path.basename(tmp_file)
+
+    def _check_shared_storage_test_file(self, context, filename):
+        """Confirms existence of the tmpfile under FLAGS.instances_path.
+        Cannot confirm tmpfile return False."""
+        tmp_file = os.path.join(FLAGS.instances_path, filename)
+        if not os.path.exists(tmp_file):
+            return False
+        else:
+            return True
+
+    def _cleanup_shared_storage_test_file(self, context, filename):
+        """Removes existence of the tmpfile under FLAGS.instances_path."""
+        tmp_file = os.path.join(FLAGS.instances_path, filename)
+        os.remove(tmp_file)
 
     def ensure_filtering_rules_for_instance(self, instance_ref, network_info,
                                             time=None):
