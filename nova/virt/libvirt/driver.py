@@ -2217,11 +2217,11 @@ class LibvirtDriver(driver.ComputeDriver):
                                                      disk_over_commit)
         # Compare CPU
         src = instance_ref['host']
-        source_cpu_info = self._get_compute_info(context, src)['cpu_info']
-        self._compare_cpu(context, source_cpu_info)
+        source_cpu_info = self._get_compute_info(ctxt, src)['cpu_info']
+        self._compare_cpu(source_cpu_info)
 
         # Create file on storage, to be checked on source host
-        filename = self._create_shared_storage_test_file(context, dest)
+        filename = self._create_shared_storage_test_file()
 
         return {"filename": filename, "block_migration": block_migration}
 
@@ -2233,7 +2233,7 @@ class LibvirtDriver(driver.ComputeDriver):
         :param disk_over_commit: if true, allow disk over commit
         """
         filename = dest_check_data["filename"]
-        self._cleanup_shared_storage_test_file(ctxt, filename)
+        self._cleanup_shared_storage_test_file(filename)
 
     def check_can_live_migrate_source(self, ctxt, instance_ref,
                                       dest_check_data):
@@ -2248,10 +2248,11 @@ class LibvirtDriver(driver.ComputeDriver):
         """
         # Checking shared storage connectivity
         # if block migration, instances_paths should not be on shared storage.
+        dest = FLAGS.host
         filename = dest_check_data["filename"]
         block_migration = dest_check_data["block_migration"]
 
-        shared = self._check_shared_storage_test_file(context, filename, src)
+        shared = self._check_shared_storage_test_file(filename)
 
         if block_migration:
             if shared:
@@ -2283,8 +2284,9 @@ class LibvirtDriver(driver.ComputeDriver):
         #  otherwise virtual disk size < available disk size.
 
         # Getting total available disk of host
+        dest = FLAGS.host
         available_gb = self._get_compute_info(context,
-                                            FLAGS.host)['disk_available_least']
+                                              dest)['disk_available_least']
         available = available_gb * (1024 ** 3)
 
         ret = self.get_instance_disk_info(instance_ref['name'])
@@ -2345,7 +2347,7 @@ class LibvirtDriver(driver.ComputeDriver):
             LOG.error(reason=m % locals())
             raise exception.InvalidCPUInfo(reason=m % locals())
 
-    def _create_shared_storage_test_file(self, context):
+    def _create_shared_storage_test_file(self):
         """Makes tmpfile under FLAGS.instance_path."""
         dirpath = FLAGS.instances_path
         fd, tmp_file = tempfile.mkstemp(dir=dirpath)
@@ -2355,7 +2357,7 @@ class LibvirtDriver(driver.ComputeDriver):
         os.close(fd)
         return os.path.basename(tmp_file)
 
-    def _check_shared_storage_test_file(self, context, filename):
+    def _check_shared_storage_test_file(self, filename):
         """Confirms existence of the tmpfile under FLAGS.instances_path.
         Cannot confirm tmpfile return False."""
         tmp_file = os.path.join(FLAGS.instances_path, filename)
@@ -2364,7 +2366,7 @@ class LibvirtDriver(driver.ComputeDriver):
         else:
             return True
 
-    def _cleanup_shared_storage_test_file(self, context, filename):
+    def _cleanup_shared_storage_test_file(self, filename):
         """Removes existence of the tmpfile under FLAGS.instances_path."""
         tmp_file = os.path.join(FLAGS.instances_path, filename)
         os.remove(tmp_file)
