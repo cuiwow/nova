@@ -120,9 +120,7 @@ class ComputeRpcAPITestCase(test.TestCase):
 
     def test_check_can_live_migrate_source(self):
         self._test_compute_api('check_can_live_migrate_source', 'call',
-                instance=self.fake_instance, destination='dest',
-                block_migration=True, disk_over_commit=True,
-                dest_check_data={"test": "data"})
+                instance=self.fake_instance, dest_check_data={"test": "data"})
 
     def test_confirm_resize_cast(self):
         self._test_compute_api('confirm_resize', 'cast',

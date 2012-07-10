@@ -1391,13 +1391,15 @@ class ComputeTestCase(BaseTestCase):
         self.mox.StubOutWithMock(self.compute.driver,
                                  'check_can_live_migrate_source')
 
+        dest_check_data = {"test": "data"}
         db.instance_get(context, inst_id).AndReturn(inst_ref)
-        self.compute.driver.check_can_live_migrate_source(context, inst_ref,
-                dest, True, False, None)
+        self.compute.driver.check_can_live_migrate_source(context,
+                                                          inst_ref,
+                                                          dest_check_data)
 
         self.mox.ReplayAll()
-        self.compute.check_can_live_migrate_source(context, inst_id, dest,
-                                                   True, False, None)
+        self.compute.check_can_live_migrate_source(context, inst_id,
+                                                   dest_check_data)
 
     def test_check_can_live_migrate_destination_works_correctly(self):
         """Confirm check_can_live_migrate_destination works on positive path"""
@@ -1419,9 +1421,9 @@ class ComputeTestCase(BaseTestCase):
         self.compute.driver.check_can_live_migrate_destination(context,
                 inst_ref, dest, True, False).AndReturn(dest_check_data)
         self.compute.compute_rpcapi.check_can_live_migrate_source(context,
-                inst_ref, dest, True, False, dest_check_data)
+                inst_ref, dest_check_data)
         self.compute.driver.check_can_live_migrate_destination_cleanup(
-                context, inst_ref, dest, True, False)
+                context, dest_check_data)
 
         self.mox.ReplayAll()
         self.compute.check_can_live_migrate_destination(context, inst_id, dest,
@@ -1467,10 +1469,9 @@ class ComputeTestCase(BaseTestCase):
         self.compute.driver.check_can_live_migrate_destination(context,
                 inst_ref, dest, True, False).AndReturn(dest_check_data)
         self.compute.compute_rpcapi.check_can_live_migrate_source(context,
-                inst_ref, dest, True, False, dest_check_data).AndRaise(
-                                                           exception.Invalid())
+                inst_ref, dest_check_data).AndRaise(exception.Invalid())
         self.compute.driver.check_can_live_migrate_destination_cleanup(
-                context, inst_ref, dest, True, False)
+                context, dest_check_data)
 
         self.mox.ReplayAll()
         self.assertRaises(exception.Invalid,

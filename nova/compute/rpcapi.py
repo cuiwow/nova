@@ -96,13 +96,9 @@ class ComputeAPI(nova.openstack.common.rpc.proxy.RpcProxy):
                            disk_over_commit=disk_over_commit),
                   topic=_compute_topic(self.topic, ctxt, None, instance))
 
-    def check_can_live_migrate_source(self, ctxt, instance, destination,
-            block_migration, disk_over_commit, dest_check_data):
+    def check_can_live_migrate_source(self, ctxt, dest_check_data, instance):
         self.call(ctxt, self.make_msg('check_can_live_migrate_source',
                            instance_id=instance['id'],
-                           destination=destination,
-                           block_migration=block_migration,
-                           disk_over_commit=disk_over_commit,
                            dest_check_data=dest_check_data),
                   topic=_compute_topic(self.topic, ctxt, None, instance))
 

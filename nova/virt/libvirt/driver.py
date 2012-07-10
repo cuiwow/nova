@@ -2230,15 +2230,13 @@ class LibvirtDriver(driver.ComputeDriver):
         """Do required cleanup on dest host after check_can_live_migrate calls
 
         :param ctxt: security context
-        :param instance_ref: nova.db.sqlalchemy.models.Instance
-        :param dest: destination host
-        :param block_migration: if true, prepare for block migration
         :param disk_over_commit: if true, allow disk over commit
         """
         filename = dest_check_data["filename"]
         self._cleanup_shared_storage_test_file(ctxt, filename)
 
-    def check_can_live_migrate_source(self, ctxt, dest_check_data):
+    def check_can_live_migrate_source(self, ctxt, instance_ref,
+                                      dest_check_data):
         """Check if it is possible to execute live migration.
 
         This checks if the live migration can succeed, based on the results
@@ -2246,9 +2244,6 @@ class LibvirtDriver(driver.ComputeDriver):
 
         :param context: security context
         :param instance_ref: nova.db.sqlalchemy.models.Instance
-        :param dest: destination host
-        :param block_migration: if true, prepare for block migration
-        :param disk_over_commit: if true, allow disk over commit
         :param dest_check_data: result of check_can_live_migrate_destination
         """
         # Checking shared storage connectivity
@@ -2270,28 +2265,13 @@ class LibvirtDriver(driver.ComputeDriver):
             raise exception.InvalidSharedStorage(reason=reason, path=dest)
 
     def _get_compute_info(self, context, host):
-        """get compute node's information specified by key
-
-        :param context: security context
-        :param host: hostname(must be compute node)
-        :param key: column name of compute_nodes
-        :return: value specified by key
-
-        """
+        """Get compute host's information specified by key"""
         compute_node_ref = db.service_get_all_compute_by_host(context, host)
         return compute_node_ref[0]['compute_node'][0]
 
     def _assert_compute_node_has_enough_disk(self, context, instance_ref,
                                              disk_over_commit):
-        """Checks if host has enough disk for block migration.
-
-        :param context: security context
-        :param instance_ref: nova.db.sqlalchemy.models.Instance object
-        :param dest: destination host
-        :param disk_over_commit: if True, consider real(not virtual)
-                                 disk size.
-
-        """
+        """Checks if host has enough disk for block migration."""
         # Libvirt supports qcow2 disk format,which is usually compressed
         # on compute nodes.
         # Real disk image (compressed) may enlarged to "virtual disk size",

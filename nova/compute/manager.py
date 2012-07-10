@@ -1899,23 +1899,19 @@ class ComputeManager(manager.SchedulerDependentManager):
         :param dest: destination host
         :param block_migration: if true, prepare for block migration
         :param disk_over_commit: if true, allow disk over commit
-
         """
         instance_ref = self.db.instance_get(ctxt, instance_id)
         dest_check_data = self.driver.check_can_live_migrate_destination(ctxt,
             instance_ref, destination, block_migration, disk_over_commit)
         try:
             self.compute_rpcapi.check_can_live_migrate_source(ctxt,
-                instance_ref, destination, block_migration, disk_over_commit,
-                dest_check_data)
+                    instance_ref, dest_check_data)
         finally:
             self.driver.check_can_live_migrate_destination_cleanup(ctxt,
-                instance_ref, destination, block_migration, disk_over_commit)
+                    dest_check_data)
 
-    def check_can_live_migrate_source(self, ctxt, instance_id, destination,
-                                      block_migration=False,
-                                      disk_over_commit=False,
-                                      dest_check_data=None):
+    def check_can_live_migrate_source(self, ctxt, instance_id,
+                                      dest_check_data):
         """Check if it is possible to execute live migration.
 
         This checks if the live migration can succeed, based on the results
@@ -1923,15 +1919,11 @@ class ComputeManager(manager.SchedulerDependentManager):
 
         :param context: security context
         :param instance_id: nova.db.sqlalchemy.models.Instance.Id
-        :param dest: destination host
-        :param block_migration: if true, prepare for block migration
-        :param disk_over_commit: if true, allow disk over commit
         :param dest_check_data: result of check_can_live_migrate_destination
-
         """
         instance_ref = self.db.instance_get(ctxt, instance_id)
         self.driver.check_can_live_migrate_source(ctxt, instance_ref,
-            destination, block_migration, disk_over_commit, dest_check_data)
+                                                  dest_check_data)
 
     def pre_live_migration(self, context, instance_id,
                            block_migration=False, disk=None):
