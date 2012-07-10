@@ -1456,7 +1456,7 @@ class LibvirtConnTestCase(test.TestCase):
         self.mox.StubOutWithMock(conn, '_get_compute_info')
         self.mox.StubOutWithMock(conn, 'get_instance_disk_info')
         self.mox.StubOutWithMock(conn, '_create_shared_storage_test_file')
-        self.mox.StubOutWithMock(conn, '_compare_cpu')
+        self.mox.StubOutWithMock(conn, 'compare_cpu')
 
         conn._get_compute_info(self.context, FLAGS.host).AndReturn(
                                               {'disk_available_least': 400})
@@ -1465,7 +1465,7 @@ class LibvirtConnTestCase(test.TestCase):
         # _check_cpu_match
         conn._get_compute_info(self.context,
                                src).AndReturn({'cpu_info': "asdf"})
-        conn._compare_cpu("asdf")
+        conn.compare_cpu("asdf")
 
         # mounted_on_same_shared_storage
         filename = "file"
@@ -1485,12 +1485,12 @@ class LibvirtConnTestCase(test.TestCase):
 
         self.mox.StubOutWithMock(conn, '_get_compute_info')
         self.mox.StubOutWithMock(conn, '_create_shared_storage_test_file')
-        self.mox.StubOutWithMock(conn, '_compare_cpu')
+        self.mox.StubOutWithMock(conn, 'compare_cpu')
 
         # _check_cpu_match
         conn._get_compute_info(self.context,
                                src).AndReturn({'cpu_info': "asdf"})
-        conn._compare_cpu("asdf")
+        conn.compare_cpu("asdf")
 
         # mounted_on_same_shared_storage
         filename = "file"
@@ -1528,11 +1528,11 @@ class LibvirtConnTestCase(test.TestCase):
         conn = libvirt_driver.LibvirtDriver(False)
 
         self.mox.StubOutWithMock(conn, '_get_compute_info')
-        self.mox.StubOutWithMock(conn, '_compare_cpu')
+        self.mox.StubOutWithMock(conn, 'compare_cpu')
 
         conn._get_compute_info(self.context, src).AndReturn(
                 {'cpu_info': "asdf"})
-        conn._compare_cpu("asdf").AndRaise(exception.InvalidCPUInfo)
+        conn.compare_cpu("asdf").AndRaise(exception.InvalidCPUInfo)
 
         self.mox.ReplayAll()
         self.assertRaises(exception.InvalidCPUInfo,
