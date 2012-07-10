@@ -217,9 +217,8 @@ class Scheduler(object):
         self._live_migration_src_check(context, instance_ref)
         self._live_migration_dest_check(context, instance_ref, dest)
         self._live_migration_common_check(context, instance_ref, dest)
-        self.compute_rpcapi.check_can_live_migrate(context, instance_ref,
-                                                   dest, block_migration,
-                                                   disk_over_commit)
+        self.compute_rpcapi.check_can_live_migrate_destination(context,
+                instance_ref, dest, block_migration, disk_over_commit)
 
         # Change instance_state
         values = {"task_state": task_states.MIGRATING}
