@@ -2218,7 +2218,7 @@ class LibvirtDriver(driver.ComputeDriver):
         # Compare CPU
         src = instance_ref['host']
         source_cpu_info = self._get_compute_info(ctxt, src)['cpu_info']
-        self.compare_cpu(source_cpu_info)
+        self._compare_cpu(source_cpu_info)
 
         # Create file on storage, to be checked on source host
         filename = self._create_shared_storage_test_file()
@@ -2308,7 +2308,7 @@ class LibvirtDriver(driver.ComputeDriver):
                        "<= instance:%(necessary)s)")
             raise exception.MigrationError(reason=reason % locals())
 
-    def compare_cpu(self, cpu_info):
+    def _compare_cpu(self, cpu_info):
         """Checks the host cpu is compatible to a cpu given by xml.
 
         "xml" must be a part of libvirt.openReadonly().getCapabilities().
