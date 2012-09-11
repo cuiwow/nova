@@ -1900,11 +1900,11 @@ class XenAPIAggregateTestCase(stubs.XenAPITestBase):
         aggregate = self._aggregate_setup(hosts=['host', 'host2'],
                                           metadata=self.fake_metadata)
         self.conn._pool.add_to_aggregate(self.context, aggregate, "host2",
-                                         compute_uuid='fake_uuid',
+                                         dict(compute_uuid='fake_uuid',
                                          url='fake_url',
                                          user='fake_user',
                                          passwd='fake_pass',
-                                         xenhost_uuid='fake_uuid')
+                                         xenhost_uuid='fake_uuid'))
         self.assertTrue(fake_join_slave.called)
 
     def test_add_to_aggregate_first_host(self):
