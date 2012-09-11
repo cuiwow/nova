@@ -4617,6 +4617,32 @@ class ComputeAggrTestCase(BaseTestCase):
         self.compute.remove_aggregate_host(self.context, self.aggr.id, "host")
         self.assertTrue(fake_driver_remove_from_aggregate.called)
 
+    def test_add_slave_to_hypervisor_pool(self):
+        def driver_add_to_aggregate(context, aggregate, host, **kwargs):
+            self.assertEquals(self.context, context)
+            self.assertEquals(aggregate.id, self.aggr.id)
+            self.assertEquals(host, "the_host")
+            self.assertEquals("SLAVE_INFO", kwargs.get("slave_info"))
+
+        self.stubs.Set(self.compute.driver, "add_to_aggregate",
+                       driver_add_to_aggregate)
+
+        self.compute.add_slave_to_hypervisor_pool(self.context, self.aggr.id,
+            "the_host", "SLAVE_INFO")
+
+    def test_remove_slave_from_hypervisor_pool(self):
+        def driver_remove_from_aggregate(context, aggregate, host, **kwargs):
+            self.assertEquals(self.context, context)
+            self.assertEquals(aggregate.id, self.aggr.id)
+            self.assertEquals(host, "the_host")
+            self.assertEquals("SLAVE_INFO", kwargs.get("slave_info"))
+
+        self.stubs.Set(self.compute.driver, "remove_from_aggregate",
+                       driver_remove_from_aggregate)
+
+        self.compute.remove_slave_from_hypervisor_pool(self.context,
+            self.aggr.id, "the_host", "SLAVE_INFO")
+
 
 class ComputePolicyTestCase(BaseTestCase):
 

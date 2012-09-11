@@ -128,9 +128,11 @@ class ComputeAPI(nova.openstack.common.rpc.proxy.RpcProxy):
 
         2.0 - Remove 1.x backwards compat
         2.1 - Adds orig_sys_metadata to rebuild()
+        2.2 - Adds add_slave_to_hypervisor_pool() and
+              remove_slave_from_hypervisor_pool()
     '''
 
-    BASE_RPC_API_VERSION = '2.1'
+    BASE_RPC_API_VERSION = '2.0'
 
     def __init__(self):
         super(ComputeAPI, self).__init__(
@@ -149,6 +151,14 @@ class ComputeAPI(nova.openstack.common.rpc.proxy.RpcProxy):
         self.cast(ctxt, self.make_msg('add_aggregate_host',
                 aggregate_id=aggregate_id, host=host_param),
                 topic=_compute_topic(self.topic, ctxt, host, None))
+
+    def add_slave_to_hypervisor_pool(self, ctxt, aggregate_id, host_param,
+                                     slave_info, host):
+        self.cast(
+            ctxt, self.make_msg('add_slave_to_hypervisor_pool',
+            aggregate_id=aggregate_id, host=host_param, slave_info=slave_info),
+            topic=_compute_topic(self.topic, ctxt, host, None),
+            version='2.2')
 
     def add_fixed_ip_to_instance(self, ctxt, instance, network_id):
         instance_p = jsonutils.to_primitive(instance)
@@ -358,6 +368,14 @@ class ComputeAPI(nova.openstack.common.rpc.proxy.RpcProxy):
         self.cast(ctxt, self.make_msg('remove_aggregate_host',
                 aggregate_id=aggregate_id, host=host_param),
                 topic=_compute_topic(self.topic, ctxt, host, None))
+
+    def remove_slave_from_hypervisor_pool(self, ctxt, aggregate_id, host_param,
+                                          slave_info, host):
+        self.cast(
+            ctxt, self.make_msg('remove_slave_from_hypervisor_pool',
+            aggregate_id=aggregate_id, host=host_param, slave_info=slave_info),
+            topic=_compute_topic(self.topic, ctxt, host, None),
+            version='2.2')
 
     def remove_fixed_ip_from_instance(self, ctxt, instance, address):
         instance_p = jsonutils.to_primitive(instance)

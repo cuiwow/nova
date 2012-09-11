@@ -97,6 +97,16 @@ class ComputeRpcAPITestCase(test.TestCase):
         for arg, expected_arg in zip(self.fake_args, expected_args):
             self.assertEqual(arg, expected_arg)
 
+    def test_add_slave_to_hypervisor_pool(self):
+        self._test_compute_api('add_slave_to_hypervisor_pool', 'cast',
+            aggregate_id='id', host_param='host', slave_info={}, host='host',
+            version='2.2')
+
+    def test_remove_slave_from_hypervisor_pool(self):
+        self._test_compute_api('remove_slave_from_hypervisor_pool', 'cast',
+            aggregate_id='id', host_param='host', slave_info={}, host='host',
+            version='2.2')
+
     def test_add_aggregate_host(self):
         self._test_compute_api('add_aggregate_host', 'cast', aggregate_id='id',
                 host_param='host', host='host')

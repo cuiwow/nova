@@ -213,7 +213,7 @@ def _get_image_meta(context, image_ref):
 class ComputeManager(manager.SchedulerDependentManager):
     """Manages the running instances from creation to destruction."""
 
-    RPC_API_VERSION = '2.1'
+    RPC_API_VERSION = '2.2'
 
     def __init__(self, compute_driver=None, *args, **kwargs):
         """Load configuration options and connect to the hypervisor."""
@@ -2808,11 +2808,41 @@ class ComputeManager(manager.SchedulerDependentManager):
                                                aggregate.id, host)
 
     @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
+    def add_slave_to_hypervisor_pool(self, context, aggregate_id, host,
+                                     slave_info):
+        """Add a new hypervisor to an existing hypervisor pool."""
+        aggregate = self.db.aggregate_get(context, aggregate_id)
+        try:
+            self.driver.add_to_aggregate(
+                context, aggregate, host, slave_info=slave_info)
+        except exception.AggregateError:
+            with excutils.save_and_reraise_exception():
+                self.driver.undo_aggregate_operation(context,
+                                               self.db.aggregate_host_delete,
+                                               aggregate.id, host)
+
+    @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
     def remove_aggregate_host(self, context, aggregate_id, host):
         """Removes a host from a physical hypervisor pool."""
         aggregate = self.db.aggregate_get(context, aggregate_id)
         try:
             self.driver.remove_from_aggregate(context, aggregate, host)
+        except (exception.AggregateError,
+                exception.InvalidAggregateAction) as e:
+            with excutils.save_and_reraise_exception():
+                self.driver.undo_aggregate_operation(
+                                    context, self.db.aggregate_host_add,
+                                    aggregate.id, host,
+                                    isinstance(e, exception.AggregateError))
+
+    @exception.wrap_exception(notifier=notifier, publisher_id=publisher_id())
+    def remove_slave_from_hypervisor_pool(self, context, aggregate_id, host,
+                                          slave_info):
+        """Removes a host from a physical hypervisor pool."""
+        aggregate = self.db.aggregate_get(context, aggregate_id)
+        try:
+            self.driver.remove_from_aggregate(
+                context, aggregate, host, slave_info=slave_info)
         except (exception.AggregateError,
                 exception.InvalidAggregateAction) as e:
             with excutils.save_and_reraise_exception():
