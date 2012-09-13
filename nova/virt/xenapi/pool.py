@@ -57,6 +57,12 @@ class ResourcePool(object):
         self._session = session
         self.compute_rpcapi = compute_rpcapi.ComputeAPI()
 
+    def _is_hv_pool(self, context, aggregate_id):
+        return pool_states.is_hv_pool(context, aggregate_id)
+
+    def _get_metadata(self, context, aggregate_id):
+        return db.aggregate_metadata_get(context, aggregate_id)
+
     def undo_aggregate_operation(self, context, op, aggregate_id,
                                   host, set_error):
         """Undo aggregate operation when pool error raised"""
@@ -71,23 +77,23 @@ class ResourcePool(object):
 
     def add_to_aggregate(self, context, aggregate, host, slave_info=None):
         """Add a compute host to an aggregate."""
-        if not pool_states.is_hv_pool(context, aggregate.id):
+        if not self._is_hv_pool(context, aggregate.id):
             return
 
         invalid = {pool_states.CHANGING: 'setup in progress',
                    pool_states.DISMISSED: 'aggregate deleted',
                    pool_states.ERROR: 'aggregate in error'}
 
-        if (db.aggregate_metadata_get(context, aggregate.id)[pool_states.KEY]
+        if (self._get_metadata(context, aggregate.id)[pool_states.KEY]
                 in invalid.keys()):
             raise exception.InvalidAggregateAction(
                     action='add host',
                     aggregate_id=aggregate.id,
-                    reason=invalid[db.aggregate_metadata_get(context,
+                    reason=invalid[self._get_metadata(context,
                             aggregate.id)
                     [pool_states.KEY]])
 
-        if (db.aggregate_metadata_get(context, aggregate.id)[pool_states.KEY]
+        if (self._get_metadata(context, aggregate.id)[pool_states.KEY]
                 == pool_states.CREATED):
             db.aggregate_metadata_add(context, aggregate.id,
                     {pool_states.KEY: pool_states.CHANGING})
@@ -102,7 +108,7 @@ class ResourcePool(object):
         else:
             # the pool is already up and running, we need to figure out
             # whether we can serve the request from this host or not.
-            master_compute = db.aggregate_metadata_get(context,
+            master_compute = self._get_metadata(context,
                     aggregate.id)['master_compute']
             if master_compute == FLAGS.host and master_compute != host:
                 # this is the master ->  do a pool-join
@@ -125,25 +131,25 @@ class ResourcePool(object):
     def remove_from_aggregate(self, context, aggregate, host, slave_info=None):
         """Remove a compute host from an aggregate."""
         slave_info = slave_info or dict()
-        if not pool_states.is_hv_pool(context, aggregate.id):
+        if not self._is_hv_pool(context, aggregate.id):
             return
 
         invalid = {pool_states.CREATED: 'no hosts to remove',
                    pool_states.CHANGING: 'setup in progress',
                    pool_states.DISMISSED: 'aggregate deleted', }
-        if (db.aggregate_metadata_get(context, aggregate.id)[pool_states.KEY]
+        if (self._get_metadata(context, aggregate.id)[pool_states.KEY]
                 in invalid.keys()):
             raise exception.InvalidAggregateAction(
                     action='remove host',
                     aggregate_id=aggregate.id,
-                    reason=invalid[db.aggregate_metadata_get(context,
+                    reason=invalid[self._get_metadata(context,
                             aggregate.id)[pool_states.KEY]])
 
-        master_compute = db.aggregate_metadata_get(context,
+        master_compute = self._get_metadata(context,
                 aggregate.id)['master_compute']
         if master_compute == FLAGS.host and master_compute != host:
             # this is the master -> instruct it to eject a host from the pool
-            host_uuid = db.aggregate_metadata_get(context, aggregate.id)[host]
+            host_uuid = self._get_metadata(context, aggregate.id)[host]
             self._eject_slave(aggregate.id,
                               slave_info.get('compute_uuid'), host_uuid)
             db.aggregate_metadata_delete(context, aggregate.id, host)
