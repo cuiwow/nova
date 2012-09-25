@@ -1143,11 +1143,11 @@ def _fetch_disk_image(context, session, instance, name_label, image_id,
             destroy_vdi(session, vdi_ref)
             LOG.debug(_("Kernel/Ramdisk VDI %s destroyed"), vdi_ref,
                       instance=instance)
-            vdi_type = ImageType.to_string(image_type)
-            return {vdi_type: dict(uuid=None, file=filename)}
+            vdi_role = ImageType.get_role(image_type)
+            return {vdi_role: dict(uuid=None, file=filename)}
         else:
-            vdi_type = ImageType.to_string(image_type)
-            return {vdi_type: dict(uuid=vdi_uuid, file=None)}
+            vdi_role = ImageType.get_role(image_type)
+            return {vdi_role: dict(uuid=vdi_uuid, file=None)}
     except (session.XenAPI.Failure, IOError, OSError) as e:
         # We look for XenAPI and OS failures.
         LOG.exception(_("Failed to fetch glance image"),
