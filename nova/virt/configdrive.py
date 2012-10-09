@@ -126,11 +126,14 @@ class ConfigDriveBuilder(object):
                 utils.execute('umount', mountdir, run_as_root=True)
             shutil.rmtree(mountdir)
 
+    def make_vfat_drive(self, path):
+        self._make_vfat(path)
+
     def make_drive(self, path):
         if FLAGS.config_drive_format == 'iso9660':
             self._make_iso9660(path)
         elif FLAGS.config_drive_format == 'vfat':
-            self._make_vfat(path)
+            self.make_vfat_drive(path)
         else:
             raise exception.ConfigDriveUnknownFormat(
                 format=FLAGS.config_drive_format)
