@@ -1268,7 +1268,8 @@ class NetworkManager(manager.SchedulerDependentManager):
             get_vif = self.db.virtual_interface_get_by_instance_and_network
             vif = get_vif(context, instance_ref['uuid'], network['id'])
             values = {'allocated': True,
-                      'virtual_interface_id': vif['id']}
+                      'virtual_interface_id': vif['id'],
+                      'host': self.host}
             self.db.fixed_ip_update(context, address, values)
 
         name = instance_ref['display_name']

@@ -2221,7 +2221,7 @@ def network_get_associated_fixed_ips(context, network_id, host=None):
                           filter(models.FixedIp.instance_uuid != None).\
                           filter(models.FixedIp.virtual_interface_id != None)
     if host:
-        query = query.filter(models.Instance.host == host)
+        query = query.filter(models.FixedIp.host == host)
     result = query.all()
     data = []
     for datum in result:
