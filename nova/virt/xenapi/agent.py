@@ -121,10 +121,10 @@ class XenAPIBasedAgent(object):
         self.instance = instance
         self.vm_ref = vm_ref
 
-    def get_agent_version(self, session, instance, vm_ref):
+    def get_agent_version(self):
         """Get the version of the agent running on the VM instance."""
 
-        LOG.debug(_('Querying agent version'), instance=instance)
+        LOG.debug(_('Querying agent version'), instance=self.instance)
 
         # The agent can be slow to start for a variety of reasons. On Windows,
         # it will generally perform a setup process on first boot that can
@@ -134,12 +134,12 @@ class XenAPIBasedAgent(object):
 
         expiration = time.time() + FLAGS.agent_version_timeout
         while time.time() < expiration:
-            ret = _get_agent_version(session, instance, vm_ref)
+            ret = _get_agent_version(self.session, self.instance, self.vm_ref)
             if ret:
                 return ret
 
         LOG.info(_('Reached maximum time attempting to query agent version'),
-                 instance=instance)
+                 instance=self.instance)
 
         return None
 

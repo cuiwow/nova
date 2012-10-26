@@ -515,7 +515,7 @@ class VMOps(object):
         # Update agent, if necessary
         # This also waits until the agent starts
         agent = xapi_agent.XenAPIBasedAgent(self._session, instance, vm_ref)
-        version = agent.get_agent_version(self._session, instance, vm_ref)
+        version = agent.get_agent_version()
         if version:
             LOG.info(_('Instance agent version: %s'), version,
                      instance=instance)
