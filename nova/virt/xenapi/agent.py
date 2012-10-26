@@ -161,7 +161,7 @@ class XenAPIBasedAgent(object):
         return resp['message']
 
 
-    def set_admin_password(self, session, instance, vm_ref, new_pass):
+    def set_admin_password(self, new_pass):
         """Set the root/admin password on the VM instance.
 
         This is done via an agent running on the VM. Communication between nova
@@ -170,18 +170,19 @@ class XenAPIBasedAgent(object):
         We're using a simple Diffie-Hellman class instead of a more advanced
         library (such as M2Crypto) for compatibility with the agent code.
         """
-        LOG.debug(_('Setting admin password'), instance=instance)
+        LOG.debug(_('Setting admin password'), instance=self.instance)
 
         dh = SimpleDH()
 
         # Exchange keys
         args = {'pub': str(dh.get_public())}
-        resp = _call_agent(session, instance, vm_ref, 'key_init', args)
+        resp = _call_agent(
+            self.session, self.instance, self.vm_ref, 'key_init', args)
 
         # Successful return code from key_init is 'D0'
         if resp['returncode'] != 'D0':
             msg = _('Failed to exchange keys: %(resp)r') % locals()
-            LOG.error(msg, instance=instance)
+            LOG.error(msg, instance=self.instance)
             raise Exception(msg)
 
         # Some old versions of the Windows agent have a trailing \\r\\n
@@ -195,12 +196,13 @@ class XenAPIBasedAgent(object):
 
         # Send the encrypted password
         args = {'enc_pass': enc_pass}
-        resp = _call_agent(session, instance, vm_ref, 'password', args)
+        resp = _call_agent(
+            self.session, self.instance, self.vm_ref, 'password', args)
 
         # Successful return code from password is '0'
         if resp['returncode'] != '0':
             msg = _('Failed to update password: %(resp)r') % locals()
-            LOG.error(msg, instance=instance)
+            LOG.error(msg, instance=self.instance)
             raise Exception(msg)
 
         return resp['message']

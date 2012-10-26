@@ -537,8 +537,7 @@ class VMOps(object):
 
         # Set admin password, if necessary
         if admin_password and not no_agent:
-            agent.set_admin_password(self._session, instance, vm_ref,
-                                     admin_password)
+            agent.set_admin_password(admin_password)
 
         # Reset network config
         agent.resetnetwork(self._session, instance, vm_ref)
@@ -836,7 +835,7 @@ class VMOps(object):
         """Set the root/admin password on the VM instance."""
         vm_ref = self._get_vm_opaque_ref(instance)
         agent = xapi_agent.XenAPIBasedAgent(self._session, instance, vm_ref)
-        agent.set_admin_password(self._session, instance, vm_ref, new_pass)
+        agent.set_admin_password(new_pass)
 
     def inject_file(self, instance, path, contents):
         """Write a file to the VM instance."""
