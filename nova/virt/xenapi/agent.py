@@ -116,6 +116,11 @@ def _get_agent_version(session, instance, vm_ref):
 
 
 class XenAPIBasedAgent(object):
+    def __init__(self, session, instance, vm_ref):
+        self.session = session
+        self.instance = instance
+        self.vm_ref = vm_ref
+
     def get_agent_version(self, session, instance, vm_ref):
         """Get the version of the agent running on the VM instance."""
 
