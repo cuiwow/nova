@@ -42,7 +42,7 @@ from nova.openstack.common import log as logging
 from nova.openstack.common import timeutils
 from nova import utils
 from nova.virt import firewall
-from nova.virt.xenapi import agent
+from nova.virt.xenapi import agent as xapi_agent
 from nova.virt.xenapi import pool_states
 from nova.virt.xenapi import vm_utils
 from nova.virt.xenapi import volume_utils
@@ -514,6 +514,7 @@ class VMOps(object):
 
         # Update agent, if necessary
         # This also waits until the agent starts
+        agent = xapi_agent.XenAPIBasedAgent()
         version = agent.get_agent_version(self._session, instance, vm_ref)
         if version:
             LOG.info(_('Instance agent version: %s'), version,
@@ -834,11 +835,13 @@ class VMOps(object):
     def set_admin_password(self, instance, new_pass):
         """Set the root/admin password on the VM instance."""
         vm_ref = self._get_vm_opaque_ref(instance)
+        agent = xapi_agent.XenAPIBasedAgent()
         agent.set_admin_password(self._session, instance, vm_ref, new_pass)
 
     def inject_file(self, instance, path, contents):
         """Write a file to the VM instance."""
         vm_ref = self._get_vm_opaque_ref(instance)
+        agent = xapi_agent.XenAPIBasedAgent()
         agent.inject_file(self._session, instance, vm_ref, path, contents)
 
     @staticmethod
@@ -1384,6 +1387,7 @@ class VMOps(object):
     def reset_network(self, instance):
         """Calls resetnetwork method in agent."""
         vm_ref = self._get_vm_opaque_ref(instance)
+        agent = xapi_agent.XenAPIBasedAgent()
         agent.resetnetwork(self._session, instance, vm_ref)
 
     def inject_hostname(self, instance, vm_ref, hostname):
