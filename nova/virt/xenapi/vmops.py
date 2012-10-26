@@ -156,6 +156,9 @@ class VMOps(object):
         self.vif_driver = vif_impl(xenapi_session=self._session)
         self.default_root_dev = '/dev/sda'
 
+    def _get_agent(self, instance, vm_ref):
+        return xapi_agent.XenAPIBasedAgent(self._session, instance, vm_ref)
+
     def list_instances(self):
         """List VM instances."""
         # TODO(justinsb): Should we just always use the details method?
@@ -514,7 +517,7 @@ class VMOps(object):
 
         # Update agent, if necessary
         # This also waits until the agent starts
-        agent = xapi_agent.XenAPIBasedAgent(self._session, instance, vm_ref)
+        agent = self._get_agent(instance, vm_ref)
         version = agent.get_agent_version()
         if version:
             LOG.info(_('Instance agent version: %s'), version,
@@ -833,13 +836,13 @@ class VMOps(object):
     def set_admin_password(self, instance, new_pass):
         """Set the root/admin password on the VM instance."""
         vm_ref = self._get_vm_opaque_ref(instance)
-        agent = xapi_agent.XenAPIBasedAgent(self._session, instance, vm_ref)
+        agent = self._get_agent(instance, vm_ref)
         agent.set_admin_password(new_pass)
 
     def inject_file(self, instance, path, contents):
         """Write a file to the VM instance."""
         vm_ref = self._get_vm_opaque_ref(instance)
-        agent = xapi_agent.XenAPIBasedAgent(self._session, instance, vm_ref)
+        agent = self._get_agent(instance, vm_ref)
         agent.inject_file(path, contents)
 
     @staticmethod
@@ -1385,7 +1388,7 @@ class VMOps(object):
     def reset_network(self, instance):
         """Calls resetnetwork method in agent."""
         vm_ref = self._get_vm_opaque_ref(instance)
-        agent = xapi_agent.XenAPIBasedAgent(self._session, instance, vm_ref)
+        agent = self._get_agent(instance, vm_ref)
         agent.resetnetwork()
 
     def inject_hostname(self, instance, vm_ref, hostname):
