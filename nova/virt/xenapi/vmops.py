@@ -522,7 +522,7 @@ class VMOps(object):
 
         if (version and agent_build and
             cmp_version(version, agent_build['version']) < 0):
-            agent.agent_update(self._session, instance, vm_ref, agent_build)
+            agent.agent_update(agent_build)
 
         # if the guest agent is not available, configure the
         # instance, but skip the admin password configuration

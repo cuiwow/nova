@@ -144,18 +144,19 @@ class XenAPIBasedAgent(object):
         return None
 
 
-    def agent_update(self, session, instance, vm_ref, agent_build):
+    def agent_update(self, agent_build):
         """Update agent on the VM instance."""
 
         LOG.info(_('Updating agent to %s'), agent_build['version'],
-                 instance=instance)
+                 instance=self.instance)
 
         # Send the encrypted password
         args = {'url': agent_build['url'], 'md5sum': agent_build['md5hash']}
-        resp = _call_agent(session, instance, vm_ref, 'agentupdate', args)
+        resp = _call_agent(
+            self.session, self.instance, self.vm_ref, 'agentupdate', args)
         if resp['returncode'] != '0':
             LOG.error(_('Failed to update agent: %(resp)r'), locals(),
-                      instance=instance)
+                      instance=self.instance)
             return None
         return resp['message']
 
