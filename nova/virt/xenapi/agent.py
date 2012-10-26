@@ -208,8 +208,8 @@ class XenAPIBasedAgent(object):
         return resp['message']
 
 
-    def inject_file(self, session, instance, vm_ref, path, contents):
-        LOG.debug(_('Injecting file path: %r'), path, instance=instance)
+    def inject_file(self, path, contents):
+        LOG.debug(_('Injecting file path: %r'), path, instance=self.instance)
 
         # Files/paths must be base64-encoded for transmission to agent
         b64_path = base64.b64encode(path)
@@ -219,10 +219,11 @@ class XenAPIBasedAgent(object):
 
         # If the agent doesn't support file injection, a NotImplementedError
         # will be raised with the appropriate message.
-        resp = _call_agent(session, instance, vm_ref, 'inject_file', args)
+        resp = _call_agent(
+            self.session, self.instance, self.vm_ref, 'inject_file', args)
         if resp['returncode'] != '0':
             LOG.error(_('Failed to inject file: %(resp)r'), locals(),
-                      instance=instance)
+                      instance=self.instance)
             return None
 
         return resp['message']

@@ -532,8 +532,7 @@ class VMOps(object):
         if injected_files:
             # Inject any files, if specified
             for path, contents in injected_files:
-                agent.inject_file(self._session, instance, vm_ref,
-                                  path, contents)
+                agent.inject_file(path, contents)
 
         # Set admin password, if necessary
         if admin_password and not no_agent:
@@ -841,7 +840,7 @@ class VMOps(object):
         """Write a file to the VM instance."""
         vm_ref = self._get_vm_opaque_ref(instance)
         agent = xapi_agent.XenAPIBasedAgent(self._session, instance, vm_ref)
-        agent.inject_file(self._session, instance, vm_ref, path, contents)
+        agent.inject_file(path, contents)
 
     @staticmethod
     def _sanitize_xenstore_key(key):
