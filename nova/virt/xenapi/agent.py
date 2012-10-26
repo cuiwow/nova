@@ -143,7 +143,6 @@ class XenAPIBasedAgent(object):
 
         return None
 
-
     def agent_update(self, agent_build):
         """Update agent on the VM instance."""
 
@@ -159,7 +158,6 @@ class XenAPIBasedAgent(object):
                       instance=self.instance)
             return None
         return resp['message']
-
 
     def set_admin_password(self, new_pass):
         """Set the root/admin password on the VM instance.
@@ -207,7 +205,6 @@ class XenAPIBasedAgent(object):
 
         return resp['message']
 
-
     def inject_file(self, path, contents):
         LOG.debug(_('Injecting file path: %r'), path, instance=self.instance)
 
@@ -227,7 +224,6 @@ class XenAPIBasedAgent(object):
             return None
 
         return resp['message']
-
 
     def resetnetwork(self):
         LOG.debug(_('Resetting network'), instance=self.instance)
