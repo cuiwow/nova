@@ -539,7 +539,7 @@ class VMOps(object):
             agent.set_admin_password(admin_password)
 
         # Reset network config
-        agent.resetnetwork(self._session, instance, vm_ref)
+        agent.resetnetwork()
 
         # Set VCPU weight
         inst_type = db.instance_type_get(ctx, instance['instance_type_id'])
@@ -1386,7 +1386,7 @@ class VMOps(object):
         """Calls resetnetwork method in agent."""
         vm_ref = self._get_vm_opaque_ref(instance)
         agent = xapi_agent.XenAPIBasedAgent(self._session, instance, vm_ref)
-        agent.resetnetwork(self._session, instance, vm_ref)
+        agent.resetnetwork()
 
     def inject_hostname(self, instance, vm_ref, hostname):
         """Inject the hostname of the instance into the xenstore."""

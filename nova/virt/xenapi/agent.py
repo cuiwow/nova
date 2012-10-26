@@ -229,14 +229,15 @@ class XenAPIBasedAgent(object):
         return resp['message']
 
 
-    def resetnetwork(self, session, instance, vm_ref):
-        LOG.debug(_('Resetting network'), instance=instance)
+    def resetnetwork(self):
+        LOG.debug(_('Resetting network'), instance=self.instance)
 
-        resp = _call_agent(session, instance, vm_ref, 'resetnetwork',
-                           timeout=FLAGS.agent_resetnetwork_timeout)
+        resp = _call_agent(
+            self.session, self.instance, self.vm_ref, 'resetnetwork',
+            timeout=FLAGS.agent_resetnetwork_timeout)
         if resp['returncode'] != '0':
             LOG.error(_('Failed to reset network: %(resp)r'), locals(),
-                      instance=instance)
+                      instance=self.instance)
             return None
 
         return resp['message']
