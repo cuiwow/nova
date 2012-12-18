@@ -265,7 +265,8 @@ class NetworkRpcAPITestCase(test.TestCase):
     def test__associate_floating_ip(self):
         self._test_network_api('_associate_floating_ip', rpc_method='call',
                 floating_address='fake_addr', fixed_address='fixed_address',
-                interface='fake_interface', host='fake_host')
+                interface='fake_interface', host='fake_host',
+                instance_uuid='fake_uuid')
 
     def test__disassociate_floating_ip(self):
         self._test_network_api('_disassociate_floating_ip', rpc_method='call',

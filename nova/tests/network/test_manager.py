@@ -675,6 +675,7 @@ class VlanNetworkTestCase(test.TestCase):
         def fake2(*args, **kwargs):
             return {'address': '10.0.0.1',
                     'pool': 'nova',
+                    'instance_uuid': FAKEUUID,
                     'interface': 'eth0',
                     'fixed_ip_id': 1}
 
@@ -682,6 +683,7 @@ class VlanNetworkTestCase(test.TestCase):
         def fake3(*args, **kwargs):
             return {'address': '10.0.0.1',
                     'pool': 'nova',
+                    'instance_uuid': FAKEUUID,
                     'interface': 'eth0',
                     'fixed_ip_id': None}
 
@@ -689,6 +691,7 @@ class VlanNetworkTestCase(test.TestCase):
         def fake4(*args, **kwargs):
             return {'address': '10.0.0.1',
                     'pool': 'nova',
+                    'instance_uuid': FAKEUUID,
                     'interface': 'eth0',
                     'network_id': 'blah'}
 

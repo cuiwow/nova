@@ -259,10 +259,10 @@ class NetworkAPI(rpc_proxy.RpcProxy):
     # 1.0 API was being documented using this client proxy class.  It should be
     # changed if there was ever a 2.0.
     def _associate_floating_ip(self, ctxt, floating_address, fixed_address,
-                               interface, host):
+                               interface, host, instance_uuid):
         return self.call(ctxt, self.make_msg('_associate_floating_ip',
                 floating_address=floating_address, fixed_address=fixed_address,
-                interface=interface),
+                interface=interface, instance_uuid=instance_uuid),
                 topic=rpc.queue_get_for(ctxt, self.topic, host))
 
     # NOTE(russellb): Ideally this would not have a prefix of '_' since it is
