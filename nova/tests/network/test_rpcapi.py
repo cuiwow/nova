@@ -271,7 +271,7 @@ class NetworkRpcAPITestCase(test.TestCase):
     def test__disassociate_floating_ip(self):
         self._test_network_api('_disassociate_floating_ip', rpc_method='call',
                 address='fake_addr', interface='fake_interface',
-                host='fake_host')
+                host='fake_host', instance_uuid='fake_uuid')
 
     def test_lease_fixed_ip(self):
         self._test_network_api('lease_fixed_ip', rpc_method='cast',
