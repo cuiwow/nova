@@ -646,7 +646,7 @@ class FloatingIP(object):
         else:
             # send to correct host
             self.network_rpcapi._disassociate_floating_ip(context, address,
-                    interface, host)
+                    interface, host, fixed_ip['instance_uuid'])
 
     def _disassociate_floating_ip(self, context, address, interface,
                                   instance_uuid):
