@@ -664,7 +664,6 @@ class VlanNetworkTestCase(test.TestCase):
         self.stubs.Set(self.network.db, 'floating_ip_get_by_address', fake3)
         self.network.deallocate_floating_ip(ctxt, ctxt.project_id)
 
-
     def test_associate_floating_ip(self):
         ctxt = context.RequestContext('testuser', 'testproject',
                                       is_admin=False)
