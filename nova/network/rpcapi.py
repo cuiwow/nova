@@ -269,7 +269,8 @@ class NetworkAPI(rpc_proxy.RpcProxy):
     # a part of the rpc API. However, this is how it was being called when the
     # 1.0 API was being documented using this client proxy class.  It should be
     # changed if there was ever a 2.0.
-    def _disassociate_floating_ip(self, ctxt, address, interface, host, instance_uuid):
+    def _disassociate_floating_ip(self, ctxt, address, interface, host,
+                                  instance_uuid):
         return self.call(ctxt, self.make_msg('_disassociate_floating_ip',
                 address=address, interface=interface,
                 instance_uuid=instance_uuid),
