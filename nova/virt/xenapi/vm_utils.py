@@ -34,6 +34,7 @@ from xml.parsers import expat
 
 from eventlet import greenthread
 
+from nova.api.metadata import base as instance_metadata
 from nova import block_device
 from nova.compute import power_state
 from nova import exception
@@ -839,6 +840,9 @@ def _generate_disk(session, instance, vm_ref, userdevice, name_label,
 
         # 4. Create VBD between instance VM and swap VDI
         create_vbd(session, vm_ref, vdi_ref, userdevice, bootable=False)
+
+        # 5. Return a reference to the VDI
+        return vdi_ref
     except Exception:
         with excutils.save_and_reraise_exception():
             destroy_vdi(session, vdi_ref)
@@ -859,6 +863,24 @@ def generate_ephemeral(session, instance, vm_ref, userdevice, name_label,
     _generate_disk(session, instance, vm_ref, userdevice, name_label,
                    'ephemeral', size_gb * 1024,
                    CONF.default_ephemeral_format)
+
+
+def generate_configdrive(session, instance, vm_ref, userdevice):
+    # NOTE(mikal): libvirt supports injecting the admin password as well. This
+    # is not currently implemented for xenapi as it is not supported by the
+    # existing file injection
+    inst_md = instance_metadata.InstanceMetadata(instance)
+    metadata = instance.get('metadata')
+    cdb = configdrive.ConfigDriveBuilder(instance_md=inst_md,
+                                         extra_md=metadata)
+    try:
+        vdi_ref = _generate_disk(session, instance, vm_ref, userdevice,
+                                 'config-2', 'configdrive', 64, 'vfat')
+        with vdi_attached_here(session, vdi_ref, read_only=False) as dev:
+            configdrive._inject_into_vfat(dev)
+
+    finally:
+        cdb.cleanup()
 
 
 def create_kernel_image(context, session, instance, name_label, image_id,

@@ -39,6 +39,7 @@ from nova.openstack.common import jsonutils
 from nova.openstack.common import log as logging
 from nova.openstack.common import timeutils
 from nova import utils
+from nova.virt import configdrive
 from nova.virt import firewall
 from nova.virt.xenapi import agent as xapi_agent
 from nova.virt.xenapi import pool_states
@@ -74,6 +75,7 @@ DEVICE_RESCUE = '1'
 DEVICE_SWAP = '2'
 DEVICE_EPHEMERAL = '3'
 DEVICE_CD = '4'
+DEVICE_CONFIGDRIVE = '5'
 
 
 def cmp_version(a, b):
@@ -415,7 +417,12 @@ class VMOps(object):
                 disk_image_type)
         self._setup_vm_networking(instance, vm_ref, vdis, network_info,
                 rescue)
-        self.inject_instance_metadata(instance, vm_ref)
+
+        # NOTE(mikal): file injection only happens if we are _not_ using a
+        # configdrive.
+        if not configdrive.required_by(instance):
+            self.inject_instance_metadata(instance, vm_ref)
+
         return vm_ref
 
     def _setup_vm_networking(self, instance, vm_ref, vdis, network_info,
@@ -514,6 +521,11 @@ class VMOps(object):
             vm_utils.generate_ephemeral(self._session, instance, vm_ref,
                                         DEVICE_EPHEMERAL, name_label,
                                         ephemeral_gb)
+
+        # Attach (optional) configdrive v2 disk
+        if configdrive.required_by(instance):
+            vm_utils.generate_configdrive(self._session, instance, vm_ref,
+                                          DEVICE_CONFIGDRIVE)
 
     def _boot_new_instance(self, instance, vm_ref, injected_files,
                            admin_password):
