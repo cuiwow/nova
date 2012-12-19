@@ -122,7 +122,6 @@ class _ConfigDriveBuilder(object):
             f.truncate(64 * 1024 * 1024)
 
         utils.mkfs('vfat', path, label='config-2')
-
         mounted = False
         try:
             mountdir = tempfile.mkdtemp(dir=CONF.config_drive_tempdir,
