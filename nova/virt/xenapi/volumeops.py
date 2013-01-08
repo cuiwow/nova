@@ -35,7 +35,7 @@ class VolumeOps(object):
     def __init__(self, session):
         self._session = session
 
-    def _introduce_sr(self, sr_uuid, label, params):
+    def _introduce_sr_unless_present(self, sr_uuid, label, params):
         LOG.debug(_("Introducing SR %s") % label)
         sr_ref = volume_utils.find_sr_by_uuid(self._session, sr_uuid)
         if sr_ref:
@@ -47,13 +47,13 @@ class VolumeOps(object):
             raise exception.NovaException(_('Could not introduce SR'))
         return sr_ref
 
-    def _forget_sr(self, sr_uuid):
+    def _forget_sr_if_present(self, sr_uuid):
         sr_ref = volume_utils.find_sr_by_uuid(self._session, sr_uuid)
         if sr_ref is None:
-            LOG.INFO(_('SR %s not found in the xapi database') % sr_uuid)
+            LOG.debug(_('SR %s not found in the xapi database') % sr_uuid)
             return
         try:
-            volume_utils._forget_sr(self._session, sr_uuid)
+            volume_utils.forget_sr(self._session, sr_uuid)
         except volume_utils.StorageError, exc:
             LOG.exception(exc)
             raise exception.NovaException(_('Could not forget SR'))
@@ -90,7 +90,7 @@ class VolumeOps(object):
 
         # Introduce SR
         try:
-            sr_ref = self._introduce_sr(uuid, label, sr_params)
+            sr_ref = self._introduce_sr_unless_present(uuid, label, sr_params)
             LOG.debug(_('Introduced %(label)s as %(sr_ref)s.') % locals())
         except self._session.XenAPI.Failure, exc:
             LOG.exception(exc)
@@ -112,7 +112,7 @@ class VolumeOps(object):
                                                  vdi_uuid, target_lun)
         except volume_utils.StorageError, exc:
             LOG.exception(exc)
-            self._forget_sr(uuid)
+            self._forget_sr_if_present(uuid)
             raise Exception(_('Unable to create VDI on SR %(sr_ref)s for'
                     ' instance %(instance_name)s') % locals())
 
@@ -122,7 +122,7 @@ class VolumeOps(object):
                                           osvol=True)
         except self._session.XenAPI.Failure, exc:
             LOG.exception(exc)
-            self._forget_sr(uuid)
+            self._forget_sr_if_present(uuid)
             raise Exception(_('Unable to use SR %(sr_ref)s for'
                               ' instance %(instance_name)s') % locals())
 
@@ -131,7 +131,7 @@ class VolumeOps(object):
                 self._session.call_xenapi("VBD.plug", vbd_ref)
             except self._session.XenAPI.Failure, exc:
                 LOG.exception(exc)
-                self._forget_sr(uuid)
+                self._forget_sr_if_present(uuid)
                 raise Exception(_('Unable to attach volume to instance %s')
                                 % instance_name)
 
