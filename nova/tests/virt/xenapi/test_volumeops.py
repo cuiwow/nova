@@ -85,7 +85,8 @@ class VolumeAttachTestCase(test.TestCase):
         self.stubs.Set(ops._session, 'call_xenapi', fake_call_xenapi)
 
         self.mox.StubOutWithMock(volumeops.volume_utils, 'parse_sr_info')
-        self.mox.StubOutWithMock(ops, '_introduce_sr_unless_present')
+        self.mox.StubOutWithMock(
+            volumeops.volume_utils, 'introduce_sr_unless_present')
         self.mox.StubOutWithMock(volumeops.volume_utils, 'introduce_vdi')
         self.mox.StubOutWithMock(volumeops.vm_utils, 'create_vbd')
 
@@ -93,7 +94,8 @@ class VolumeAttachTestCase(test.TestCase):
             connection_data, sr_label).AndReturn(
                 tuple([sr_uuid, sr_label, sr_params]))
 
-        ops._introduce_sr_unless_present(sr_uuid, sr_label, sr_params).AndReturn(sr_ref)
+        volumeops.volume_utils.introduce_sr_unless_present(
+            session, sr_uuid, sr_label, sr_params).AndReturn(sr_ref)
 
         volumeops.volume_utils.introduce_vdi(
             session, sr_ref, vdi_uuid, None).AndReturn(vdi_ref)

@@ -22,6 +22,7 @@ and storage repositories
 import re
 import string
 
+from nova import exception
 from nova.openstack.common import cfg
 from nova.openstack.common import log as logging
 
@@ -381,3 +382,16 @@ def _get_target_port(iscsi_string):
         return iscsi_string[iscsi_string.find(':') + 1:]
     elif iscsi_string is None or CONF.target_port:
         return CONF.target_port
+
+
+def introduce_sr_unless_present(session, sr_uuid, label, params):
+    LOG.debug(_("Introducing SR %s") % label)
+    sr_ref = find_sr_by_uuid(session, sr_uuid)
+    if sr_ref:
+        LOG.debug(_('SR found in xapi database. No need to introduce'))
+        return sr_ref
+    sr_ref = introduce_sr(session, sr_uuid, label, params)
+
+    if sr_ref is None:
+        raise exception.NovaException(_('Could not introduce SR'))
+    return sr_ref

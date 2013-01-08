@@ -35,18 +35,6 @@ class VolumeOps(object):
     def __init__(self, session):
         self._session = session
 
-    def _introduce_sr_unless_present(self, sr_uuid, label, params):
-        LOG.debug(_("Introducing SR %s") % label)
-        sr_ref = volume_utils.find_sr_by_uuid(self._session, sr_uuid)
-        if sr_ref:
-            LOG.debug(_('SR found in xapi database. No need to introduce'))
-            return sr_ref
-        sr_ref = volume_utils.introduce_sr(self._session, sr_uuid, label,
-                                           params)
-        if sr_ref is None:
-            raise exception.NovaException(_('Could not introduce SR'))
-        return sr_ref
-
     def _forget_sr_if_present(self, sr_uuid):
         sr_ref = volume_utils.find_sr_by_uuid(self._session, sr_uuid)
         if sr_ref is None:
@@ -90,7 +78,8 @@ class VolumeOps(object):
 
         # Introduce SR
         try:
-            sr_ref = self._introduce_sr_unless_present(uuid, label, sr_params)
+            sr_ref = volume_utils.introduce_sr_unless_present(
+                self._session, uuid, label, sr_params)
             LOG.debug(_('Introduced %(label)s as %(sr_ref)s.') % locals())
         except self._session.XenAPI.Failure, exc:
             LOG.exception(exc)
