@@ -19,12 +19,25 @@ Management class for Storage-related functions (attach, detach, etc).
 """
 
 from nova import exception
+from nova.openstack.common import cfg
 from nova.openstack.common import log as logging
+from nova.virt import driver
 from nova.virt.xenapi import vm_utils
 from nova.virt.xenapi import volume_utils
 
-
 LOG = logging.getLogger(__name__)
+
+xenapi_volume_opts = [
+    cfg.ListOpt('xenapi_volume_drivers',
+                default=[
+                  'iscsi=nova.virt.xenapi.volume_drivers.LegacyDriver',
+                  'xensm=nova.virt.xenapi.volume_drivers.LegacyDriver',
+                  ],
+                help='XenAPI handlers for remote volumes.'),
+]
+
+CONF = cfg.CONF
+CONF.register_opts(xenapi_volume_opts)
 
 
 class VolumeOps(object):
@@ -34,6 +47,8 @@ class VolumeOps(object):
 
     def __init__(self, session):
         self._session = session
+        self._volume_driver_registry = driver.to_driver_registry(
+            CONF.xenapi_volume_drivers, volumeops=self, session=self._session)
 
     def attach_volume(self, connection_info, instance_name, mountpoint,
                       hotplug=True):

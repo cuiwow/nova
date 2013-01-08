@@ -24,7 +24,6 @@ import functools
 import os
 import re
 
-import mock
 from nova.compute import api as compute_api
 from nova.compute import instance_types
 from nova.compute import power_state
@@ -3184,28 +3183,3 @@ class XenAPISessionTestCase(test.TestCase):
             ((6, 0, 50), 'XenServer'),
             session._get_product_version_and_brand()
         )
-
-
-class VolumeDriverRegistryTestCase(stubs.XenAPITestBase):
-    def _get_compute_driver(self):
-        self.flags(
-            xenapi_connection_url='test_url',
-            xenapi_connection_password='test_pass',
-            xenapi_volume_drivers=[
-                'config1', 'config2']
-        )
-        stubs.stubout_session(self.stubs, stubs.FakeSessionForVMTests)
-        return xenapi_conn.XenAPIDriver(fake.FakeVirtAPI(), False)
-
-    def test_volume_driver_registry_populated(self):
-        with mock.patch('nova.virt.driver.to_driver_registry',
-                        return_value='REGISTRY') as to_driver_registry:
-            xapi_driver = self._get_compute_driver()
-
-        to_driver_registry.assert_called_once_with(
-            ['config1', 'config2'], session=xapi_driver._session,
-            volumeops=xapi_driver._volumeops
-        )
-
-        self.assertEquals(
-            xapi_driver._volume_driver_registry, 'REGISTRY')
