@@ -114,40 +114,20 @@ class VolumeOps(object):
                                 % instance_name)
 
     def detach_volume(self, connection_info, instance_name, mountpoint):
-        """Detach volume storage to VM instance"""
-
-        vm_ref = vm_utils.vm_ref_or_raise(self._session, instance_name)
-
-        # Detach VBD from VM
         LOG.debug(_("Detach_volume: %(instance_name)s, %(mountpoint)s")
                 % locals())
+
+        vm_ref = vm_utils.vm_ref_or_raise(self._session, instance_name)
         device_number = volume_utils.get_device_number(mountpoint)
-        try:
-            vbd_ref = vm_utils.find_vbd_by_number(self._session, vm_ref,
-                                                  device_number)
-        except volume_utils.StorageError, exc:
-            LOG.exception(exc)
-            raise Exception(_('Unable to locate volume %s') % mountpoint)
+        vbd_ref = vm_utils.find_vbd_by_number(self._session, vm_ref,
+                                              device_number)
 
-        try:
-            if not vm_utils._is_vm_shutdown(self._session, vm_ref):
-                vm_utils.unplug_vbd(self._session, vbd_ref)
-        except volume_utils.StorageError, exc:
-            LOG.exception(exc)
-            raise Exception(_('Unable to detach volume %s') % mountpoint)
-        try:
-            vm_utils.destroy_vbd(self._session, vbd_ref)
-        except volume_utils.StorageError, exc:
-            LOG.exception(exc)
-            raise Exception(_('Unable to destroy vbd %s') % mountpoint)
+        if not vm_utils._is_vm_shutdown(self._session, vm_ref):
+            vm_utils.unplug_vbd(self._session, vbd_ref)
+        vm_utils.destroy_vbd(self._session, vbd_ref)
 
-        # Forget SR only if no other volumes on this host are using it
-        try:
-            sr_ref = volume_utils.find_sr_from_vbd(self._session, vbd_ref)
-            volume_utils.purge_sr(self._session, sr_ref)
-        except volume_utils.StorageError, exc:
-            LOG.exception(exc)
-            raise Exception(_('Error purging SR %s') % sr_ref)
+        sr_ref = volume_utils.find_sr_from_vbd(self._session, vbd_ref)
+        volume_utils.purge_sr(self._session, sr_ref)
 
-        LOG.info(_('Mountpoint %(mountpoint)s detached from'
-                ' instance %(instance_name)s') % locals())
+        LOG.debug(_('Mountpoint %(mountpoint)s detached from'
+                    ' instance %(instance_name)s') % locals())
