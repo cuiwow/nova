@@ -113,6 +113,12 @@ xenapi_opts = [
     cfg.IntOpt('xenapi_login_timeout',
                default=10,
                help='Timeout in seconds for XenAPI login.'),
+    cfg.ListOpt('xenapi_volume_drivers',
+                default=[
+                  'iscsi=nova.virt.xenapi.volume_drivers.LegacyDriver',
+                  'xensm=nova.virt.xenapi.volume_drivers.LegacyDriver',
+                  ],
+                help='XenAPI handlers for remote volumes.'),
     ]
 
 CONF = cfg.CONF
@@ -143,6 +149,9 @@ class XenAPIDriver(driver.ComputeDriver):
         self._initiator = None
         self._hypervisor_hostname = None
         self._pool = pool.ResourcePool(self._session, self.virtapi)
+        self._volume_driver_registry = driver.to_driver_registry(
+            CONF.xenapi_volume_drivers, volumeops=self._volumeops,
+            session=self._session)
 
     @property
     def host_state(self):
