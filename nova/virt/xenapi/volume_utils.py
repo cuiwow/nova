@@ -395,3 +395,15 @@ def introduce_sr_unless_present(session, sr_uuid, label, params):
     if sr_ref is None:
         raise exception.NovaException(_('Could not introduce SR'))
     return sr_ref
+
+
+def forget_sr_if_present(session, sr_uuid):
+    sr_ref = find_sr_by_uuid(session, sr_uuid)
+    if sr_ref is None:
+        LOG.debug(_('SR %s not found in the xapi database') % sr_uuid)
+        return
+    try:
+        forget_sr(session, sr_uuid)
+    except StorageError, exc:
+        LOG.exception(exc)
+        raise exception.NovaException(_('Could not forget SR'))

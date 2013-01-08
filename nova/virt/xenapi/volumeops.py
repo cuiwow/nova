@@ -35,17 +35,6 @@ class VolumeOps(object):
     def __init__(self, session):
         self._session = session
 
-    def _forget_sr_if_present(self, sr_uuid):
-        sr_ref = volume_utils.find_sr_by_uuid(self._session, sr_uuid)
-        if sr_ref is None:
-            LOG.debug(_('SR %s not found in the xapi database') % sr_uuid)
-            return
-        try:
-            volume_utils.forget_sr(self._session, sr_uuid)
-        except volume_utils.StorageError, exc:
-            LOG.exception(exc)
-            raise exception.NovaException(_('Could not forget SR'))
-
     def attach_volume(self, connection_info, instance_name, mountpoint,
                       hotplug=True):
         """Attach volume storage to VM instance"""
@@ -101,7 +90,7 @@ class VolumeOps(object):
                                                  vdi_uuid, target_lun)
         except volume_utils.StorageError, exc:
             LOG.exception(exc)
-            self._forget_sr_if_present(uuid)
+            volume_utils.forget_sr_if_present(self._session, uuid)
             raise Exception(_('Unable to create VDI on SR %(sr_ref)s for'
                     ' instance %(instance_name)s') % locals())
 
@@ -111,7 +100,7 @@ class VolumeOps(object):
                                           osvol=True)
         except self._session.XenAPI.Failure, exc:
             LOG.exception(exc)
-            self._forget_sr_if_present(uuid)
+            volume_utils.forget_sr_if_present(self._session, uuid)
             raise Exception(_('Unable to use SR %(sr_ref)s for'
                               ' instance %(instance_name)s') % locals())
 
@@ -120,7 +109,7 @@ class VolumeOps(object):
                 self._session.call_xenapi("VBD.plug", vbd_ref)
             except self._session.XenAPI.Failure, exc:
                 LOG.exception(exc)
-                self._forget_sr_if_present(uuid)
+                volume_utils.forget_sr_if_present(self._session, uuid)
                 raise Exception(_('Unable to attach volume to instance %s')
                                 % instance_name)
 
