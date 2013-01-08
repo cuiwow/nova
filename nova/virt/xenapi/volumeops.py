@@ -121,7 +121,7 @@ class VolumeOps(object):
         # Detach VBD from VM
         LOG.debug(_("Detach_volume: %(instance_name)s, %(mountpoint)s")
                 % locals())
-        device_number = volume_utils.mountpoint_to_number(mountpoint)
+        device_number = volume_utils.get_device_number(mountpoint)
         try:
             vbd_ref = vm_utils.find_vbd_by_number(self._session, vm_ref,
                                                   device_number)
@@ -130,9 +130,7 @@ class VolumeOps(object):
             raise Exception(_('Unable to locate volume %s') % mountpoint)
 
         try:
-            vm_rec = self._session.call_xenapi("VM.get_record", vm_ref)
-            sr_ref = volume_utils.find_sr_from_vbd(self._session, vbd_ref)
-            if vm_rec['power_state'] != 'Halted':
+            if not vm_utils._is_vm_shutdown(self._session, vm_ref):
                 vm_utils.unplug_vbd(self._session, vbd_ref)
         except volume_utils.StorageError, exc:
             LOG.exception(exc)
@@ -145,6 +143,7 @@ class VolumeOps(object):
 
         # Forget SR only if no other volumes on this host are using it
         try:
+            sr_ref = volume_utils.find_sr_from_vbd(self._session, vbd_ref)
             volume_utils.purge_sr(self._session, sr_ref)
         except volume_utils.StorageError, exc:
             LOG.exception(exc)

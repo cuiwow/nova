@@ -20,6 +20,44 @@ from nova.virt.xenapi import volumeops
 
 
 class VolumeAttachTestCase(test.TestCase):
+    def test_detach_volume_call(self):
+        ops = volumeops.VolumeOps('session')
+        self.mox.StubOutWithMock(volumeops.vm_utils, 'vm_ref_or_raise')
+        self.mox.StubOutWithMock(volumeops.vm_utils, 'find_vbd_by_number')
+        self.mox.StubOutWithMock(volumeops.vm_utils, '_is_vm_shutdown')
+        self.mox.StubOutWithMock(volumeops.vm_utils, 'unplug_vbd')
+        self.mox.StubOutWithMock(volumeops.vm_utils, 'destroy_vbd')
+        self.mox.StubOutWithMock(volumeops.volume_utils, 'get_device_number')
+        self.mox.StubOutWithMock(volumeops.volume_utils, 'find_sr_from_vbd')
+        self.mox.StubOutWithMock(volumeops.volume_utils, 'purge_sr')
+
+        volumeops.vm_utils.vm_ref_or_raise('session', 'instance_1').AndReturn(
+            'vmref')
+
+        volumeops.volume_utils.get_device_number('mountpoint').AndReturn(
+            'devnumber')
+
+        volumeops.vm_utils.find_vbd_by_number(
+            'session', 'vmref', 'devnumber').AndReturn('vbdref')
+
+        volumeops.vm_utils._is_vm_shutdown('session', 'vmref').AndReturn(
+            False)
+
+        volumeops.vm_utils.unplug_vbd('session', 'vbdref')
+
+        volumeops.vm_utils.destroy_vbd('session', 'vbdref')
+
+        volumeops.volume_utils.find_sr_from_vbd(
+            'session', 'vbdref').AndReturn('srref')
+
+        volumeops.volume_utils.purge_sr('session', 'srref')
+
+        self.mox.ReplayAll()
+
+        ops.detach_volume(
+            dict(driver_volume_type='iscsi', data='conn_data'),
+            'instance_1', 'mountpoint')
+
     def test_attach_volume_call(self):
         ops = volumeops.VolumeOps('session')
         self.mox.StubOutWithMock(ops, '_connect_volume')
