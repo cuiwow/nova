@@ -47,7 +47,7 @@ class VolumeOps(object):
 
     def __init__(self, session):
         self._session = session
-        self._volume_driver_registry = driver.to_driver_registry(
+        self._volume_driver_registry = driver.driver_dict_from_config(
             CONF.xenapi_volume_drivers, volumeops=self, session=self._session)
 
     def attach_volume(self, connection_info, instance_name, mountpoint,

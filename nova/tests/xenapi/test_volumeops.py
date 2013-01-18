@@ -29,11 +29,11 @@ class VolumeDriverRegistryTestCase(stubs.XenAPITestBase):
         return volumeops.VolumeOps(stubs.FakeSessionForVMTests(None))
 
     def test_volume_driver_registry_populated(self):
-        with mock.patch('nova.virt.driver.to_driver_registry',
-                        return_value='REGISTRY') as to_driver_registry:
+        with mock.patch('nova.virt.driver.driver_dict_from_config',
+                        return_value='REGISTRY') as driver_dict_from_config:
             volops = self._get_volumeops()
 
-        to_driver_registry.assert_called_once_with(
+        driver_dict_from_config.assert_called_once_with(
             ['config1', 'config2'], session=volops._session,
             volumeops=volops
         )

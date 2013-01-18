@@ -285,7 +285,7 @@ class LibvirtDriver(driver.ComputeDriver):
             get_connection=self._get_connection)
         self.vif_driver = importutils.import_object(CONF.libvirt_vif_driver)
 
-        self.volume_drivers = driver.to_driver_registry(
+        self.volume_drivers = driver.driver_dict_from_config(
             CONF.libvirt_volume_drivers, self)
 
         self._host_state = None

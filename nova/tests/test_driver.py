@@ -36,8 +36,8 @@ class ToDriverRegistryTestCase(test.TestCase):
         self.assertEquals(args, inst.args)
         self.assertEquals(kwargs, inst.kwargs)
 
-    def test_registry_creation(self):
-        drvs = driver.to_driver_registry(
+    def test_driver_dict_from_config(self):
+        drvs = driver.driver_dict_from_config(
             [
                 'key1=nova.tests.test_driver.FakeDriver',
                 'key2=nova.tests.test_driver.FakeDriver2',

@@ -49,7 +49,7 @@ CONF.register_opts(driver_opts)
 LOG = logging.getLogger(__name__)
 
 
-def to_driver_registry(named_driver_config, *args, **kwargs):
+def driver_dict_from_config(named_driver_config, *args, **kwargs):
     driver_registry = dict()
 
     for driver_str in named_driver_config:
